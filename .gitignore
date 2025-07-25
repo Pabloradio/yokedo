@@ -1,18 +1,44 @@
-# Byte-compiled / optimized / DLL files
+# Database
+*.db
+*.sqlite3
+
+# Docker
+**/docker-compose.override.yml
+
+# FastAPI
+.env
+.env.local
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+logs/
+
+# Node (futuro frontend)
+node_modules/
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Python
 __pycache__/
 *.py[cod]
 *$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+pip-log.txt
 
 # Virtual environments
 .venv/
 venv/
 env/
-
-# Docker
-**/docker-compose.override.yml
-
-# IDEs / editors
-.vscode/
-
-# OS files
-.DS_Store
