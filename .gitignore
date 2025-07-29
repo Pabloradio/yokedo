@@ -10,6 +10,7 @@ assets/
 # FastAPI
 .env
 .env.local
+backend/auth-service/.env
 
 # IDEs
 .vscode/
