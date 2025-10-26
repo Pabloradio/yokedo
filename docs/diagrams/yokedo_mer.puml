@@ -1,0 +1,307 @@
+@startuml
+' ========================================================
+'  Yokedo – Data Model v1.0 (Definitive MER)
+'  Author: Juan Pablo Jiménez
+'  Date: Oct 2025
+'  Description: Final model for MVP + future-ready extensions
+' ========================================================
+
+hide circle
+skinparam linetype ortho
+skinparam classAttributeIconSize 0
+
+' --------------------------------------------------------
+' USERS & AUTHENTICATION
+' --------------------------------------------------------
+entity users {
+  * id : uuid <<PK>>
+  --
+  email : citext [unique]
+  password_hash : varchar
+  first_name : varchar
+  last_name : varchar
+  alias : citext
+  age : int
+  age_range : varchar
+  gender : varchar
+  custom_gender : varchar
+  city : varchar
+  province : varchar
+  country : varchar
+  timezone : varchar
+  language : varchar(5) -- reserved for future i18n
+  frequency_social : varchar
+  bio : text
+  profession : varchar
+  avatar_url : varchar
+  private_mode : boolean
+  social_paused : boolean
+  email_verified : boolean
+  phone_number : varchar
+  phone_verified : boolean
+  last_login_at : timestamptz
+  failed_login_attempts : int
+  locked_until : timestamptz
+  date_of_birth : date
+  created_at : timestamptz
+  updated_at : timestamptz
+}
+
+entity user_sessions {
+  * id : uuid <<PK>>
+  --
+  user_id : uuid <<FK>>
+  token_hash : varchar
+  device_info : jsonb
+  ip_address : inet
+  user_agent : text
+  revoked_by_user : boolean -- reserved for manual logout
+  created_at : timestamptz
+  expires_at : timestamptz
+  revoked_at : timestamptz
+}
+
+users ||--o{ user_sessions : "has sessions"
+
+' --------------------------------------------------------
+' INTERESTS
+' --------------------------------------------------------
+entity interests {
+  * id : serial <<PK>>
+  --
+  name : text
+  category : varchar
+  display_order : integer -- reserved for future UI sorting
+  created_at : timestamptz
+}
+
+entity user_interests {
+  * user_id : uuid <<FK>>
+  * interest_id : int <<FK>>
+  --
+  weight : real
+  created_at : timestamptz
+}
+
+users ||--o{ user_interests
+interests ||--o{ user_interests
+
+' --------------------------------------------------------
+' PLAN CATEGORIES
+' --------------------------------------------------------
+entity plan_category {
+  * id : serial <<PK>>
+  --
+  name : text
+  description : text
+}
+
+' --------------------------------------------------------
+' AVAILABILITIES
+' --------------------------------------------------------
+entity availabilities {
+  * id : uuid <<PK>>
+  --
+  user_id : uuid <<FK>>
+  start_time_utc : timestamptz
+  end_time_utc : timestamptz
+  timezone : varchar
+  plan_text : text
+  category_id : int <<FK>>
+  language_code : varchar(5)
+  is_flexible : boolean
+  is_synthetic : boolean
+  source : varchar -- habitual/punctual
+  is_recurring : boolean -- reserved for recurring events
+  created_at : timestamptz
+  updated_at : timestamptz
+}
+
+users ||--o{ availabilities
+plan_category ||--o{ availabilities
+
+' --------------------------------------------------------
+' PLAN PROPOSALS
+' --------------------------------------------------------
+entity plan_proposals {
+  * id : uuid <<PK>>
+  --
+  proposer_id : uuid <<FK>>
+  invitee_id : uuid <<FK>>
+  availability_id : uuid <<FK>>
+  message : text
+  status : varchar
+  proposed_start_time : timestamptz
+  proposed_end_time : timestamptz
+  rejection_reason : text
+  rating : int
+  reminder_sent_at : timestamptz
+  cancelled_by : uuid
+  cancelled_by_role : varchar
+  created_at : timestamptz
+  responded_at : timestamptz
+  cancelled_at : timestamptz
+  updated_at : timestamptz
+}
+
+users ||--o{ plan_proposals : proposer
+availabilities ||--o{ plan_proposals
+
+' --------------------------------------------------------
+' CONTACTS
+' --------------------------------------------------------
+entity contacts {
+  * user_id_1 : uuid <<FK>>
+  * user_id_2 : uuid <<FK>>
+  --
+  active : boolean
+  paused : boolean
+  connection_source : varchar
+  connection_strength : real
+  interaction_count : int
+  last_interaction_at : timestamptz
+  last_updated_by : uuid -- reserved for auditing
+  created_at : timestamptz
+  disconnected_at : timestamptz
+}
+
+users ||--o{ contacts
+
+' --------------------------------------------------------
+' INVITATIONS
+' --------------------------------------------------------
+entity invitation_links {
+  * id : uuid <<PK>>
+  --
+  creator_id : uuid <<FK>>
+  link_type : varchar
+  token : varchar
+  current_uses : int
+  max_uses : int
+  link_status : varchar
+  related_data : jsonb
+  created_at : timestamptz
+  expires_at : timestamptz
+  revoked_at : timestamptz
+  revoked_by : uuid
+  updated_at : timestamptz
+}
+
+entity invitation_acceptances {
+  * id : uuid <<PK>>
+  --
+  invitation_link_id : uuid <<FK>>
+  user_id : uuid <<FK>>
+  accepted_via : varchar -- reserved for channel type
+  accepted_at : timestamptz
+}
+
+users ||--o{ invitation_links : "creates"
+invitation_links ||--o{ invitation_acceptances
+users ||--o{ invitation_acceptances
+
+' --------------------------------------------------------
+' NOTIFICATIONS
+' --------------------------------------------------------
+entity notifications {
+  * id : uuid <<PK>>
+  --
+  user_id : uuid <<FK>>
+  type : varchar
+  content : text
+  related_id : uuid
+  seen : boolean
+  priority : smallint -- reserved for importance
+  scheduled_at : timestamptz -- reserved for reminders
+  created_at : timestamptz
+  sent_at : timestamptz
+}
+
+entity user_notification_settings {
+  * user_id : uuid <<FK>>
+  * notification_type : text
+  --
+  enabled : boolean
+  delivery_method : varchar
+  created_at : timestamptz
+  updated_at : timestamptz
+}
+
+users ||--o{ notifications
+users ||--o{ user_notification_settings
+
+' --------------------------------------------------------
+' INTERACTION & LOGS
+' --------------------------------------------------------
+entity user_interaction_logs {
+  * id : uuid <<PK>>
+  --
+  user_id : uuid <<FK>>
+  related_user_id : uuid
+  event_type : varchar
+  metadata : jsonb
+  timestamp : timestamptz
+}
+
+users ||--o{ user_interaction_logs
+
+' --------------------------------------------------------
+' CONTACT REQUESTS
+' --------------------------------------------------------
+entity contact_requests {
+  * id : uuid <<PK>>
+  --
+  requester_id : uuid <<FK>>
+  requested_id : uuid <<FK>>
+  status : varchar
+  via_mcp : boolean
+  message : text
+  metadata : jsonb
+  created_at : timestamptz
+  responded_at : timestamptz
+  responded_by : uuid
+  updated_at : timestamptz
+}
+
+users ||--o{ contact_requests
+
+' --------------------------------------------------------
+' ML / AI EXTENSIONS
+' --------------------------------------------------------
+entity plan_categories_map {
+  * availability_id : uuid <<FK>>
+  * category_id : int <<FK>>
+  --
+  assigned_by : varchar
+  created_at : timestamptz
+}
+
+availabilities ||--o{ plan_categories_map
+plan_category ||--o{ plan_categories_map
+
+entity semantic_similarity_log {
+  * id : uuid <<PK>>
+  --
+  availability_a_id : uuid <<FK>>
+  availability_b_id : uuid <<FK>>
+  score : real
+  model_version : text
+  computed_at : timestamptz
+}
+
+availabilities ||--o{ semantic_similarity_log
+
+entity user_affinities {
+  * user_id_a : uuid <<FK>>
+  * user_id_b : uuid <<FK>>
+  --
+  affinity : real
+  context : varchar -- reserved for future ML context
+  model_version : text
+  expires_at : timestamptz
+  computed_at : timestamptz
+}
+
+users ||--o{ user_affinities
+
+@enduml
