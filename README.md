@@ -17,3 +17,5 @@ Permite compartir disponibilidad, generar enlaces de invitación y proponer plan
 3. Explorar el servicio de auth en `http://localhost:8001`
 
 
+![MER de Yokedo](docs/diagrams/yokedo_mer.png)
+
