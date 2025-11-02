@@ -17,5 +17,14 @@ Permite compartir disponibilidad, generar enlaces de invitación y proponer plan
 3. Explorar el servicio de auth en `http://localhost:8001`
 
 
+
+## 📘 Documentación Técnica
+
+- [Modelo de Datos (v1.0)](docs/data/yokedo_data_schema.md)
+- [MER (PlantUML)](docs/diagrams/yokedo_mer.puml)
+- [Arquitectura General](docs/architecture/system_overview.md)
+- [Decisiones de Diseño (ADR)](docs/decisions/)
+
+
 ![MER de Yokedo](docs/diagrams/yokedo_mer.png)
 

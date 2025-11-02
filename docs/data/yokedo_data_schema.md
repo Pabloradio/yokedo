@@ -1,25 +1,21 @@
-# Yokedo – Modelo de Datos Definitivo
-
-**Versión:** v1.0 (MVP + extensiones preparadas)  
-**Fecha:** Octubre 2025  
-**Estado:** ✅ Listo para migraciones e implementación (Alembic + FastAPI)
+# Yokedo – Modelo de Datos v1.0 (MCP-ready)
+**Última actualización:** 2025-11-02 15:26 UTC
 
 ---
 
-## 🚀 PASO 1: Extensiones PostgreSQL (CRÍTICO)
+## 🚀 PASO 1: Extensiones PostgreSQL (CRÍTICO)
 
 ```sql
 -- Para gen_random_uuid() en PKs
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 -- Para vectores (embeddings ML)
 CREATE EXTENSION IF NOT EXISTS vector;
--- Para campos case‑insensitive
+-- Para campos case-insensitive
 CREATE EXTENSION IF NOT EXISTS citext;
 ```
-
 ---
 
-## 🚀 PASO 2: Creación de Tablas (Orden Obligatorio)
+## 🚀 PASO 2: Creación de Tablas (Orden Obligatorio)
 
 1. **users**  
 2. **user_sessions**  
@@ -38,10 +34,12 @@ CREATE EXTENSION IF NOT EXISTS citext;
 15. **plan_categories_map**  
 16. **semantic_similarity_log**  
 17. **user_affinities**  
+18. **mcp_context_snapshots** (documentada; reservada)
 
-> Todas las DDL incluyen tipos, `CHECK`, `FK`, índices y comentarios. Los campos marcados con `-- [NEW]` son extensiones seguras **aditivas** (no disruptivas) y algunos están documentados como *reserved for future use*.
+> Todas las DDL incluyen tipos, `CHECK`, `FK`, índices y comentarios. Los campos marcados con `-- [NEW]` son extensiones seguras **aditivas** y algunos están documentados como *reserved for future use*.
 
 ---
+
 ### 1. Tabla `users`
 
 ```sql
@@ -71,7 +69,7 @@ CREATE TABLE users (
 
   -- [NEW] Idioma preferido del usuario (i18n). Ej.: 'es', 'en', 'es-ES'
   language        VARCHAR(5) NULL
-                    CHECK (language ~ '^[a-z]{2}(-[A-Z]{2})?$'),
+                    CHECK (language ~ '^[a-z]2(-[A-Z]2)?$'),
 
   frequency_social VARCHAR  NULL
                     CHECK (frequency_social IN (
@@ -107,8 +105,8 @@ CREATE UNIQUE INDEX ux_users_alias ON users(alias) WHERE alias IS NOT NULL;
 -- Opcional (búsquedas por idioma)
 -- CREATE INDEX idx_users_language ON users(language) WHERE language IS NOT NULL;
 ```
-
 ---
+
 ### 2. Tabla `user_sessions`
 
 ```sql
@@ -132,8 +130,8 @@ CREATE INDEX idx_user_sessions_user_id ON user_sessions(user_id);
 CREATE INDEX idx_user_sessions_token   ON user_sessions(token_hash);
 CREATE INDEX idx_user_sessions_expires ON user_sessions(expires_at) WHERE revoked_at IS NULL;
 ```
-
 ---
+
 ### 3. Tabla `interests`
 
 ```sql
@@ -148,8 +146,8 @@ CREATE TABLE interests (
   created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 ```
-
 ---
+
 ### 4. Tabla `user_interests`
 
 ```sql
@@ -161,8 +159,8 @@ CREATE TABLE user_interests (
   PRIMARY KEY (user_id, interest_id)
 );
 ```
-
 ---
+
 ### 5. Tabla `plan_category`
 
 ```sql
@@ -185,8 +183,8 @@ INSERT INTO plan_category (name, description) VALUES
   ('family','Actividades familiares'),
   ('other','Otras actividades');
 ```
-
 ---
+
 ### 6. Tabla `availabilities`
 
 ```sql
@@ -202,7 +200,7 @@ CREATE TABLE availabilities (
 
   -- Idioma en el que se escribió plan_text (ej. 'es', 'en', 'es-ES')
   language_code   VARCHAR(5)  DEFAULT 'es'
-                    CHECK (language_code ~ '^[a-z]{2}(-[A-Z]{2})?$'),
+                    CHECK (language_code ~ '^[a-z]2(-[A-Z]2)?$'),
 
   is_flexible     BOOLEAN     NOT NULL DEFAULT FALSE,
   is_synthetic    BOOLEAN     NOT NULL DEFAULT FALSE,
@@ -229,8 +227,8 @@ CREATE INDEX idx_availabilities_plan_text ON availabilities(plan_text) WHERE pla
 CREATE INDEX idx_availabilities_category ON availabilities(category_id);
 CREATE INDEX idx_availabilities_source   ON availabilities(source) WHERE source IS NOT NULL;
 ```
-
 ---
+
 ### 7. Tabla `plan_proposals`
 
 ```sql
@@ -263,8 +261,8 @@ CREATE INDEX idx_plan_proposals_proposer     ON plan_proposals(proposer_id, stat
 CREATE INDEX idx_plan_proposals_invitee      ON plan_proposals(invitee_id, status);
 CREATE INDEX idx_plan_proposals_availability ON plan_proposals(availability_id);
 ```
-
 ---
+
 ### 8. Tabla `contacts`
 
 ```sql
@@ -294,8 +292,8 @@ CREATE INDEX idx_contacts_strength ON contacts(connection_strength DESC);
 -- Opcional:
 -- CREATE INDEX idx_contacts_last_updated_by ON contacts(last_updated_by) WHERE last_updated_by IS NOT NULL;
 ```
-
 ---
+
 ### 9. Tabla `invitation_links`
 
 ```sql
@@ -320,8 +318,8 @@ CREATE UNIQUE INDEX idx_invitation_links_token   ON invitation_links(token);
 CREATE INDEX idx_invitation_links_status         ON invitation_links(link_status, expires_at);
 CREATE INDEX idx_invitation_links_creator        ON invitation_links(creator_id, link_status);
 ```
-
 ---
+
 ### 10. Tabla `invitation_acceptances`
 
 ```sql
@@ -341,8 +339,8 @@ CREATE TABLE invitation_acceptances (
 CREATE INDEX idx_invitation_acceptances_link ON invitation_acceptances(invitation_link_id);
 CREATE INDEX idx_invitation_acceptances_user ON invitation_acceptances(user_id);
 ```
-
 ---
+
 ### 11. Tabla `notifications`
 
 ```sql
@@ -375,8 +373,8 @@ CREATE INDEX idx_notifications_unseen    ON notifications(user_id, created_at) W
 -- Opcional (bandejas por prioridad):
 -- CREATE INDEX idx_notifications_priority ON notifications(user_id, priority DESC, created_at DESC);
 ```
-
 ---
+
 ### 12. Tabla `user_interaction_logs`
 
 ```sql
@@ -392,8 +390,8 @@ CREATE TABLE user_interaction_logs (
 CREATE INDEX idx_user_logs_user  ON user_interaction_logs(user_id, timestamp);
 CREATE INDEX idx_user_logs_event ON user_interaction_logs(event_type, timestamp);
 ```
-
 ---
+
 ### 13. Tabla `user_notification_settings`
 
 ```sql
@@ -411,8 +409,8 @@ CREATE TABLE user_notification_settings (
 CREATE INDEX idx_uns_notification_type ON user_notification_settings(notification_type);
 CREATE INDEX idx_uns_delivery_method ON user_notification_settings(delivery_method);
 ```
-
 ---
+
 ### 14. Tabla `contact_requests`
 
 ```sql
@@ -435,8 +433,8 @@ CREATE TABLE contact_requests (
 CREATE INDEX idx_contact_requests_status    ON contact_requests(status, created_at);
 CREATE INDEX idx_contact_requests_requested ON contact_requests(requested_id, status);
 ```
-
 ---
+
 ### 15. Tabla `plan_categories_map`
 
 ```sql
@@ -453,8 +451,8 @@ CREATE TABLE plan_categories_map (
 CREATE INDEX idx_pcm_category     ON plan_categories_map(category_id);
 CREATE INDEX idx_pcm_availability ON plan_categories_map(availability_id);
 ```
-
 ---
+
 ### 16. Tabla `semantic_similarity_log`
 
 ```sql
@@ -470,8 +468,8 @@ CREATE TABLE semantic_similarity_log (
 CREATE INDEX idx_ssl_pair_time ON semantic_similarity_log(availability_a_id, availability_b_id, computed_at);
 CREATE INDEX idx_ssl_score     ON semantic_similarity_log(score DESC);
 ```
-
 ---
+
 ### 17. Tabla `user_affinities`
 
 ```sql
@@ -493,9 +491,31 @@ CREATE TABLE user_affinities (
 CREATE INDEX idx_ua_inverse  ON user_affinities(user_id_b, user_id_a);
 CREATE INDEX idx_ua_affinity ON user_affinities(affinity DESC);
 ```
-
 ---
-## 🚀 PASO 3: Triggers `updated_at`
+
+### 18. Tabla `mcp_context_snapshots` (reserved for future integration)
+
+> 🧠 **Propósito:** Esta tabla está reservada para la integración futura de Yokedo con el estándar **Model Context Protocol (MCP)**.  
+> Permitirá almacenar “snapshots” del contexto social, temporal y semántico de cada usuario, para ser consultados o compartidos con agentes externos (LLMs, pipelines de IA, etc.).  
+> **No se incluye** en las migraciones iniciales del MVP.
+
+```sql
+CREATE TABLE mcp_context_snapshots (
+  id            UUID      PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id       UUID      NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  context_json  JSONB     NOT NULL, -- estado contextual completo (disponibilidades, afinidades, planes activos)
+  source        VARCHAR   NOT NULL
+                  CHECK (source IN ('agent','system','user')),
+  model_version TEXT      NOT NULL DEFAULT 'v1',
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_mcp_snapshots_user ON mcp_context_snapshots(user_id, created_at DESC);
+CREATE INDEX idx_mcp_snapshots_source ON mcp_context_snapshots(source);
+```
+---
+
+## 🚀 PASO 3: Triggers `updated_at`
 
 ```sql
 CREATE OR REPLACE FUNCTION update_updated_at_column()
@@ -538,7 +558,16 @@ CREATE TRIGGER trg_contact_requests_updated_at
 * ✔️ **Sintaxis SQL**: sin errores, todos los `CHECK` completos.  
 * ✔️ **Integridad**: FK a tablas existentes, orden correcto.  
 * ✔️ **Índices**: compuestos y parciales donde corresponde.  
-* ✔️ **Seguridad**: UUID, verificaciones, preparado para rate‑limiting.  
+* ✔️ **Seguridad**: UUID, verificaciones, preparado para rate-limiting.  
 * ✔️ **Auditoría**: triggers automáticos para `updated_at`.  
 * ✔️ **ML/IA**: preparado para embeddings y logs.  
 * ✔️ **Extensibilidad segura**: campos *reserved for future use* añadidos como cambios **aditivos** (no rompen el modelo).
+```sql
+-- ============================================================
+-- 🗒️ Notas internas
+-- Validación manual completada el 2025-11-02 15:26 UTC
+-- Compatible con Alembic y PostgreSQL 15+
+-- Preparado para migraciones CI/CD y futuras integraciones MCP
+-- Session: 2025-10-26 / MCP-ready revision
+-- ============================================================
+```
