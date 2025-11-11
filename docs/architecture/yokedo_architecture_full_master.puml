@@ -1,0 +1,78 @@
+@startuml yokedo_architecture_full_master
+title 🧱 Yokedo – Arquitectura Completa (8 microservicios, técnico-funcional)
+
+!theme plain
+left to right direction
+skinparam componentStyle rectangle
+
+package "Yokedo Platform (MVP+)" {
+
+    package "auth-service" as AUTH {
+        [Users]
+        [UserSessions]
+    }
+
+    package "calendar-service" as CAL {
+        [Availabilities]
+        [PlanCategory]
+    }
+
+    package "plans-service" as PLANS {
+        [PlanProposals]
+    }
+
+    package "contacts-service" as CONTACTS {
+        [Contacts]
+        [ContactRequests]
+        [UserAffinities]
+    }
+
+    package "invites-service" as INVITES {
+        [InvitationLinks]
+        [InvitationAcceptances]
+    }
+
+    package "notifications-service" as NOTIFS {
+        [Notifications]
+        [UserNotificationSettings]
+    }
+
+    package "ai-service" as AI {
+        [EmbeddingsEngine]
+        [SemanticSimilarityLog]
+    }
+
+    package "infra-service (IaC / CI-CD)" as INFRA {
+        [Terraform]
+        [GitHub Actions]
+        [K3s]
+    }
+
+    database "PostgreSQL (shared DB)" as DB
+}
+
+' Relaciones con la base de datos
+AUTH -[#blue]-> DB : users, user_sessions
+CAL -[#blue]-> DB : availabilities, plan_category
+PLANS -[#blue]-> DB : plan_proposals
+CONTACTS -[#blue]-> DB : contacts, contact_requests, user_affinities
+INVITES -[#blue]-> DB : invitation_links, invitation_acceptances
+NOTIFS -[#blue]-> DB : notifications, user_notification_settings
+AI -[#blue]-> DB : semantic_similarity_log
+INFRA -[#darkgray]-> AUTH : manage deploy
+INFRA -[#darkgray]-> CAL
+INFRA -[#darkgray]-> PLANS
+INFRA -[#darkgray]-> CONTACTS
+INFRA -[#darkgray]-> INVITES
+INFRA -[#darkgray]-> AI
+INFRA -[#darkgray]-> NOTIFS
+
+' Dependencias funcionales
+AI -[#orange]-> CAL : similitud semántica (planes)
+AI -[#orange]-> PLANS : sugerencias de plan
+AI -[#orange]-> CONTACTS : afinidad entre usuarios
+PLANS -[#purple]-> AUTH : verify JWT
+PLANS -[#green]-> CONTACTS : comprobar disponibilidad
+INVITES -[#green]-> AUTH : validar usuario
+NOTIFS -[#red]-> USERS : enviar email / notificación
+@enduml

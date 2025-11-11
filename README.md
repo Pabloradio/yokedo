@@ -1,7 +1,6 @@
 # Yokedo
 
-Yokedo es una web app para coordinar quedadas entre amigos sin líos de mensajes.  
-Permite compartir disponibilidad, generar enlaces de invitación y proponer planes en un par de clics.
+Yokedo es una web app para coordinar quedadas entre amigos, permitiendo compartir disponibilidad, generar enlaces de invitación y proponer planes en un par de clics.
 
 ## Estructura del repositorio
 

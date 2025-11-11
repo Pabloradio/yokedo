@@ -52,11 +52,11 @@ CREATE TABLE users (
   alias           CITEXT    NULL,
 
   age             INTEGER   NULL,
-  age_range       VARCHAR   NOT NULL
+  age_range       VARCHAR   NULL
                     CHECK (age_range IN (
                       'under_18','18_25','26_35','36_45','46_55','56_65','over_65'
                     )),
-  gender          VARCHAR   NOT NULL
+  gender          VARCHAR   NULL
                     CHECK (gender IN (
                       'female','male','non_binary','other','prefer_not_to_say'
                     )),

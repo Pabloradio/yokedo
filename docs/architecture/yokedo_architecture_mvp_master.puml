@@ -1,0 +1,48 @@
+@startuml yokedo_architecture_mvp_master
+title ⚙️ Yokedo – Arquitectura MVP Simplificada (4 contenedores activos, técnico-funcional)
+
+!theme plain
+left to right direction
+skinparam componentStyle rectangle
+
+package "Yokedo MVP Deployment" {
+
+    package "auth-service" as AUTH {
+        [Users]
+        [UserSessions]
+    }
+
+    package "social-service (calendar + plans + contacts + invites)" as SOCIAL {
+        [Availabilities]
+        [PlanProposals]
+        [Contacts]
+        [InvitationLinks]
+        [InvitationAcceptances]
+    }
+
+    package "ai-service" as AI {
+        [EmbeddingsEngine]
+        [SemanticSimilarityLog]
+        [UserAffinities]
+    }
+
+    database "PostgreSQL (shared DB)" as DB
+    [frontend (React)] as FE
+}
+
+' Relaciones front/backend
+FE -[#green]-> AUTH : login / register / JWT
+FE -[#green]-> SOCIAL : API REST /api/v1/*
+FE -[#green]-> AI : sugerencias / afinidades
+
+' Conexiones a BD
+AUTH -[#blue]-> DB : users, user_sessions
+SOCIAL -[#blue]-> DB : availabilities, plan_proposals, contacts, invitations
+AI -[#blue]-> DB : semantic_similarity_log, user_affinities
+
+' Dependencias funcionales
+SOCIAL -[#purple]-> AUTH : verify JWT
+AI -[#orange]-> SOCIAL : búsqueda semántica / matching
+SOCIAL -[#red]-> FE : notificaciones HTTP (toast)
+
+@enduml
