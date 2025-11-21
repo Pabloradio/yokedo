@@ -10,7 +10,9 @@ class User(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     email = Column(CITEXT, unique=True, nullable=False)
-    alias = Column(CITEXT, unique=True, nullable=False)
+    first_name = Column(String(50), nullable=False)
+    last_name = Column(String(50), nullable=False)
+    alias = Column(CITEXT, unique=True, nullable=True)
     password_hash = Column(String(128), nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)
     is_admin = Column(Boolean, default=False, nullable=False)

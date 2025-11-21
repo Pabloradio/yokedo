@@ -1,11 +1,11 @@
 from fastapi import FastAPI
-from app.routers import users
+from app.routers import auth   # <-- Import nuevo
 
 app = FastAPI(title="Yokedo Auth Service")
 
-# Incluimos los endpoints del módulo users
-app.include_router(users.router, prefix="/api/users", tags=["users"])
+# Registrar router de autenticación
+app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 
 @app.get("/")
-def read_root():
+def root():
     return {"message": "Auth service running 🚀"}
