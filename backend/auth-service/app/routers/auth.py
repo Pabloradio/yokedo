@@ -114,25 +114,10 @@ async def login_user(payload: UserLoginSchema):
 @router.get("/me", response_model=UserPublicSchema)
 async def get_my_profile(current_user: User = Depends(get_current_user)):
     """
-    Devuelve el perfil del usuario autenticado usando un esquema Pydantic.
-    
-    - Esta función no hace nada complicada.
-    - Toda la lógica de autenticación se realiza en get_current_user().
-    - Si el token es válido, current_user será un objeto User real.
-    - Si el token no es válido, FastAPI devolverá 401 automáticamente.
+    Return the authenticated user's public profile.
 
-    Este endpoint sirve para verificar fácilmente 
-    que la autenticación por JWT funciona correctamente.
+    FastAPI will automatically convert the SQLAlchemy User object
+    into the Pydantic UserPublicSchema thanks to orm_mode = True.
     """
-    
-    # Aquí simplemente seleccionamos qué datos queremos devolver.
-    # Nunca incluimos datos sensibles como password_hash.
-    return {
-        "id": str(current_user.id),
-        "email": current_user.email,
-        "alias": current_user.alias,
-        "first_name": current_user.first_name,
-        "last_name": current_user.last_name,
-        "created_at": current_user.created_at,
-    }
+    return current_user
 

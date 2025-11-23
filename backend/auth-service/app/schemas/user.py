@@ -1,5 +1,6 @@
 from pydantic import BaseModel, EmailStr, Field
 from datetime import datetime
+from uuid import UUID
 
 class UserRegisterSchema(BaseModel):
     first_name: str = Field(..., min_length=1, max_length=50)
@@ -18,7 +19,7 @@ class UserPublicSchema(BaseModel):
     Este modelo se usa para respuestas hacia el frontend.
     No incluye datos sensibles como password_hash.
     """
-    id: str = Field(..., description="User ID as UUID string")
+    id: UUID = Field(..., description="User ID as UUID string")
     email: EmailStr
     alias: str | None = None
     first_name: str

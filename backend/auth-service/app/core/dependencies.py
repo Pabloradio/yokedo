@@ -82,23 +82,29 @@ async def get_current_user(credentials = Depends(bearer_scheme)):
         )
 
     # -----------------------------
-    # (C) Buscar el usuario en la base de datos
+    # (C) Look up the user in the database
     # -----------------------------
     async with async_session() as session:
-        # Construimos la consulta para obtener el usuario por su ID
         query = select(User).where(User.id == user_id)
-
-        # Ejecutamos y obtenemos un solo usuario o None
         result = await session.execute(query)
         user = result.scalar_one_or_none()
 
         if user is None:
-            # Si el usuario no existe, también devolvemos un 401.
+            # User not found in DB
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="User not found",
                 headers={"WWW-Authenticate": "Bearer"},
             )
 
-        # Todo ok: devolvemos el usuario auténtico.
+        # Check if user account is active
+        if not user.is_active:
+            # Deny access if account is disabled
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="User account is inactive",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
+        # Everything OK: return the authenticated user
         return user
