@@ -4,7 +4,11 @@ from alembic import context
 
 # --- Importa configuración y modelos ---
 from app.database import DATABASE_URL
-from app.models.user import Base
+from app.models.base import Base
+
+from app.models.user import User
+from app.models.user_sessions import UserSession
+
 
 # --- Convierte la URL async en sync ---
 SYNC_DATABASE_URL = DATABASE_URL.replace("asyncpg", "psycopg2")

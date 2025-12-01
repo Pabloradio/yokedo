@@ -1,15 +1,19 @@
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, status, Depends
 from sqlalchemy import select
 
-from app.schemas.user import UserRegisterSchema, UserLoginSchema, UserPublicSchema
+from app.schemas.user import (
+    UserRegisterSchema, 
+    UserLoginSchema, 
+    UserPublicSchema, 
+    RefreshTokenSchema
+)
+
 from app.models.user import User
 from app.database import async_session
 from app.core.security import hash_password, verify_password
 from app.core.jwt import create_access_token
-
-from fastapi import Depends
 from app.core.dependencies import get_current_user
-
+from app.core.refresh import create_refresh_token_session, validate_refresh_token
 
 router = APIRouter()
 
@@ -96,18 +100,27 @@ async def login_user(payload: UserLoginSchema):
                 headers={"WWW-Authenticate": "Bearer"},
             )
 
-        # 3) Create JWT token (subject = user id)
+        
+        # 3) Create the short-lived access token (JWT)
         access_token = create_access_token(
             data={"sub": str(user.id)}
+)
+        
+        # 4) Create a long-lived refresh token session
+        refresh_token = await create_refresh_token_session(
+            user_id=str(user.id),
+            user_agent=None,     # deferred for Security Hardening Pass
+            ip_address=None      # deferred as well
         )
 
-        # 4) Optionally, you could update last_login_at here
-        #    when you add that field to the SQLAlchemy model.
-
+        
+        # 5) Return both tokens to the client
         return {
             "access_token": access_token,
+            "refresh_token": refresh_token,
             "token_type": "bearer",
-        }
+}
+
     
 
 # Endpoint protegido: requiere JWT
@@ -121,3 +134,29 @@ async def get_my_profile(current_user: User = Depends(get_current_user)):
     """
     return current_user
 
+
+@router.post("/refresh-token")
+async def refresh_access_token(payload: RefreshTokenSchema):
+    """
+    Exchange a valid refresh token for a new access token.
+    This endpoint:
+    - validates the refresh token
+    - loads the user session
+    - issues a new access token
+    """
+    
+    # 1. Validate refresh token and load session
+    stored_session = await validate_refresh_token(
+        refresh_token=payload.refresh_token
+    )
+    
+    # 2. Create new access token (same user)
+    new_access_token = create_access_token(
+        data={"sub": str(stored_session.user_id)}
+    )
+    
+    # 3. Return only the new access token (no rotation yet)
+    return {
+        "access_token": new_access_token,
+        "token_type": "bearer"
+    }
