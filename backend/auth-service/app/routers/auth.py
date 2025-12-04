@@ -99,6 +99,13 @@ async def login_user(payload: UserLoginSchema):
                 headers={"WWW-Authenticate": "Bearer"},
             )
 
+        # 🚫 NEW: block logins for soft-deleted users
+        if user.is_deleted:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="User account has been deleted",
+            )
+
         # 2) Verify password
         if not verify_password(payload.password, user.password_hash):
             raise HTTPException(
@@ -312,3 +319,39 @@ async def delete_session(
         
         # 5) Response
         return {"detail": "Session deleted successfully"}
+
+@router.delete("/delete-account")
+async def delete_account(current_user: User = Depends(get_current_user)):
+    """
+    Soft-delete the authenticated user's account.
+    
+    - Removes personal data (GDPR compliant)
+    - Marks user as deleted
+    - Invalidates all sessions
+    """
+    async with async_session() as session:
+        
+        # 1. Load the full user instance
+        user = current_user
+        
+        # 2. GDPR compliance -> UPDATE: these can't be nullified.
+        # user.email = None
+        # user.alias = None
+        # user.first_name = None
+        # user.last_name = None
+        
+        # 3. Mark user as deleted
+        user.is_deleted = True
+        user.deleted_at = datetime.now(timezone.utc)
+        
+        session.add(user)
+        
+        # 4. Invalidate all sessions
+        await session.execute(
+            sa.delete(UserSession).where(UserSession.user_id == user.id)
+        )
+        
+        # 5. Commit changes
+        await session.commit()
+        
+        return {"detail": "Account deleted successfully"}

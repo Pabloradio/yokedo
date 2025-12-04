@@ -106,5 +106,13 @@ async def get_current_user(credentials = Depends(bearer_scheme)):
                 headers={"WWW-Authenticate": "Bearer"},
             )
 
+        # Check if user account was soft-deleted
+        if user.is_deleted:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="User account has been deleted",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
         # Everything OK: return the authenticated user
         return user

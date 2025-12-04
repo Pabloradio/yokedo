@@ -101,6 +101,13 @@ async def validate_refresh_token(refresh_token: str) -> UserSession:
                 detail="Invalid refresh token"
             )
         
+        # 🚫 NEW: block refresh for soft-deleted accounts
+        if user.is_deleted:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="User account has been deleted"
+            )
+
         # 3. Check expiration
         now = datetime.now(timezone.utc)
         if stored_session.expires_at < now:
