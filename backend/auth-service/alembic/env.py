@@ -6,8 +6,6 @@ from alembic import context
 from app.database import DATABASE_URL
 from app.models.base import Base
 
-from app.models.user import User
-from app.models.user_sessions import UserSession
 
 
 # --- Convierte la URL async en sync ---
@@ -31,6 +29,7 @@ def run_migrations_offline():
     context.configure(
         url=url,
         target_metadata=target_metadata,
+        version_table="alembic_version_auth",
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
     )
@@ -48,7 +47,8 @@ def run_migrations_online():
     )
 
     with connectable.connect() as connection:
-        context.configure(connection=connection, target_metadata=target_metadata)
+        context.configure(connection=connection, target_metadata=target_metadata, version_table="alembic_version_auth")
+
 
         with context.begin_transaction():
             context.run_migrations()
