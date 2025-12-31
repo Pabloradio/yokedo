@@ -25,7 +25,15 @@ class UserPublicSchema(BaseModel):
     first_name: str
     last_name: str
     created_at: datetime
+    last_login_at: datetime | None = None
+
 
     class Config:
         # Permite que Pydantic convierta automáticamente objetos SQLAlchemy
         orm_mode = True
+    
+class RefreshTokenSchema(BaseModel):
+    """Schema for receiving a refresh token from the client."""
+    refresh_token: str = Field(..., min_length=10)
+
+    
