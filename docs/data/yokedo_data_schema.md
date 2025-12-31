@@ -1,21 +1,21 @@
-# Yokedo – Modelo de Datos v1.1 (MCP-ready)
-**Última actualización:** 2025-12-29 15:26 UTC
+# Yokedo – PostrgreSQL Data Schema v1.1 (MCP-ready)
+**Latest update:** 2025-12-31 12:26 UTC
 
 ---
 
-## 🚀 PASO 1: Extensiones PostgreSQL (CRÍTICO)
+## 🚀 Step 1: PostgreSQL Extensions (CRITICAL)
 
 ```sql
--- Para gen_random_uuid() en PKs
+-- For gen_random_uuid() in primary keys
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
--- Para vectores (embeddings ML)
+-- For vectors (ML embeddings)
 CREATE EXTENSION IF NOT EXISTS vector;
--- Para campos case-insensitive
+-- For case-insensitive fields
 CREATE EXTENSION IF NOT EXISTS citext;
 ```
 ---
 
-## 🚀 PASO 2: Creación de Tablas (Orden Obligatorio)
+## 🚀 STEP 2: Table Creation (Mandatory Order)
 
 1. **users**  
 2. **user_sessions**  
@@ -36,13 +36,14 @@ CREATE EXTENSION IF NOT EXISTS citext;
 17. **plan_categories_map**  
 18. **semantic_similarity_log**  
 19. **user_affinities**  
-20. **mcp_context_snapshots** (documentada; reservada)
+20. **mcp_context_snapshots** (documented; reserved)
 
-> Todas las DDL incluyen tipos, `CHECK`, `FK`, índices y comentarios. Los campos marcados con `-- [NEW]` son extensiones seguras **aditivas**.
+> All DDL statements include data types, `CHECK` constraints, foreign keys (`FK`), indexes, and comments.  
+> Fields marked with `-- [NEW]` are **additive** and backward-safe extensions.
 
 ---
 
-### 1. Tabla `users`
+### 1. Table `users`
 
 ```sql
 CREATE TABLE users (
@@ -69,7 +70,7 @@ CREATE TABLE users (
   country         VARCHAR   NULL,
   timezone        VARCHAR   NOT NULL,
 
-  -- [NEW] Idioma preferido del usuario (i18n). Ej.: 'es', 'en', 'es-ES'
+-- [NEW] User preferred language (i18n), e.g. 'es', 'en', 'es-ES'
   language        VARCHAR(5) NULL
                     CHECK (language ~ '^[a-z]{2}(-[A-Z]{2})?$'),
 
@@ -85,7 +86,7 @@ CREATE TABLE users (
   private_mode    BOOLEAN   NOT NULL DEFAULT FALSE,
   social_paused   BOOLEAN   NOT NULL DEFAULT FALSE,
 
-  -- Verificaciones y seguridad
+  -- Verifications y security
   email_verified       BOOLEAN NOT NULL DEFAULT FALSE,
   phone_number         VARCHAR NULL,
   phone_verified       BOOLEAN NOT NULL DEFAULT FALSE,
@@ -99,17 +100,17 @@ CREATE TABLE users (
   updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Índices clave
+-- Key Indexes
 CREATE INDEX idx_users_email    ON users(email);
 CREATE INDEX idx_users_phone    ON users(phone_number) WHERE phone_number IS NOT NULL;
 CREATE INDEX idx_users_location ON users(country, province, city) WHERE city IS NOT NULL;
 CREATE UNIQUE INDEX ux_users_alias ON users(alias) WHERE alias IS NOT NULL;
--- Opcional (búsquedas por idioma)
+-- Optional (language-based searches)
 -- CREATE INDEX idx_users_language ON users(language) WHERE language IS NOT NULL;
 ```
 ---
 
-### 2. Tabla `user_sessions`
+### 2. Table `user_sessions`
 
 ```sql
 CREATE TABLE user_sessions (
@@ -120,7 +121,7 @@ CREATE TABLE user_sessions (
   ip_address      INET      NULL,
   user_agent      TEXT      NULL,
 
-  -- [NEW] Permite cerrar una sesión manualmente (logout forzado)
+-- [NEW] Allows manually closing a session (forced logout)
   revoked_by_user BOOLEAN   NOT NULL DEFAULT FALSE, -- reserved for manual logout
 
   created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -134,7 +135,7 @@ CREATE INDEX idx_user_sessions_expires ON user_sessions(expires_at) WHERE revoke
 ```
 ---
 
-### 3. Tabla `interests`
+### 3. Table `interests`
 
 ```sql
 CREATE TABLE interests (
@@ -142,7 +143,7 @@ CREATE TABLE interests (
   name          TEXT     NOT NULL UNIQUE,
   category      VARCHAR  NULL,
 
-  -- [NEW] Orden de visualización en UI (chips, listas)
+  -- [NEW] Display order in the UI (chips, lists)
   display_order INTEGER  NULL, -- reserved for future UI sorting
 
   created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -150,7 +151,7 @@ CREATE TABLE interests (
 ```
 ---
 
-### 4. Tabla `user_interests`
+### 4. Table `user_interests`
 
 ```sql
 CREATE TABLE user_interests (
@@ -163,7 +164,7 @@ CREATE TABLE user_interests (
 ```
 ---
 
-### 5. Tabla `plan_category`
+### 5. Table `plan_category`
 
 ```sql
 CREATE TABLE plan_category (
@@ -211,7 +212,7 @@ CREATE TABLE availability_weekly_templates (
     -- IANA timezone, e.g. 'Europe/Madrid'
 
   plan_text TEXT NULL,
-    -- Texto libre opcional: "¿Qué te apetece hacer?"
+    -- Optional free text: "What would you like to do?"
 
   language_code VARCHAR(5) NOT NULL DEFAULT 'es'
     CHECK (language_code ~ '^[a-z]{2}(-[A-Z]{2})?$'),
@@ -226,11 +227,12 @@ CREATE INDEX idx_awd_user ON availability_weekly_templates(user_id);
 CREATE INDEX idx_awd_user_weekday ON availability_weekly_templates(user_id, weekday);
 ```
 
-**Semántica:** reglas semanales por defecto. No representan disponibilidad real ni histórica. Se aplican solo si no existe override ni disponibilidad puntual para una fecha concreta.
+**Semantics:** default weekly rules. They do not represent real or historical availability.  
+They are applied only if no override or specific-date availability exists for a given date.
 
 ---
 
-### 7. Tabla `availability_day_overrides` **[NEW]**
+### 7. Table `availability_day_overrides` **[NEW]**
 
 ```sql
 CREATE TABLE availability_day_overrides (
@@ -241,15 +243,15 @@ CREATE TABLE availability_day_overrides (
     ON DELETE CASCADE,
 
   date DATE NOT NULL,
-    -- Fecha local en la timezone del usuario
+    -- Local date in the user's timezone
 
   timezone VARCHAR(50) NOT NULL,
     -- IANA timezone
 
   override_type VARCHAR(10) NOT NULL
     CHECK (override_type IN ('replace','clear')),
-    -- replace: usar solo availabilities de ese día
-    -- clear: día sin disponibilidad aunque exista plantilla
+  -- replace: use only availabilities defined for that day
+  -- clear: no availability for the day, even if a weekly template exists
 
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -258,11 +260,12 @@ CREATE TABLE availability_day_overrides (
 );
 ```
 
-**Semántica:** señal explícita de que una fecha concreta no sigue la plantilla semanal, evitando ambigüedad entre "no definido" y "no disponible".
+**Semantics:** explicit signal that a specific date does not follow the weekly template,  
+avoiding ambiguity between “not defined” and “not available”.
 
 ---
 
-### 8. Tabla `availabilities`
+### 8. Table `availabilities`
 
 ```sql
 CREATE TABLE availabilities (
@@ -272,21 +275,21 @@ CREATE TABLE availabilities (
   end_time_utc    TIMESTAMPTZ NOT NULL,
   timezone        VARCHAR     NOT NULL,
 
-  -- Texto libre: "qué te apetece hacer"
+ -- Free-text field: "what would you like to do?"
   plan_text       TEXT        NULL,
 
-  -- Idioma en el que se escribió plan_text (ej. 'es', 'en', 'es-ES')
+  -- Language in which plan_text was written (e.g. 'es', 'en', 'es-ES')
   language_code   VARCHAR(5)  DEFAULT 'es'
                     CHECK (language_code ~ '^[a-z]{2}(-[A-Z]{2})?$'),
 
   is_flexible     BOOLEAN     NOT NULL DEFAULT FALSE,
   is_synthetic    BOOLEAN     NOT NULL DEFAULT FALSE,
 
-  -- [NEW] Origen de la franja (onboarding habitual o puntual en calendario)
+  -- [NEW] Time slot source (weekly onboarding or calendar-specific)
   source          VARCHAR     NULL
                     CHECK (source IN ('habitual','punctual')),
 
-  -- [NEW] Marcar disponibilidad recurrente (no MVP inicial)
+  -- [NEW] Marks recurring availability (not part of the initial MVP)
   is_recurring    BOOLEAN     NOT NULL DEFAULT FALSE, -- reserved for recurring events
 
   category_id     INTEGER     NULL REFERENCES plan_category(id),
@@ -306,7 +309,7 @@ CREATE INDEX idx_availabilities_source   ON availabilities(source) WHERE source 
 ```
 ---
 
-### 9. Tabla `plan_proposals`
+### 9. Table `plan_proposals`
 
 ```sql
 CREATE TABLE plan_proposals (
@@ -340,7 +343,7 @@ CREATE INDEX idx_plan_proposals_availability ON plan_proposals(availability_id);
 ```
 ---
 
-### 10. Tabla `contacts`
+### 10. Table `contacts`
 
 ```sql
 CREATE TABLE contacts (
@@ -353,7 +356,7 @@ CREATE TABLE contacts (
   interaction_count   INTEGER NOT NULL DEFAULT 0,
   connection_strength REAL    NOT NULL DEFAULT 0.0,
 
-  -- [NEW] Auditoría: último usuario que modificó el vínculo
+  -- [NEW] Audit: last user who modified the relationship
   last_updated_by     UUID    NULL REFERENCES users(id), -- reserved for auditing
 
   created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -366,12 +369,12 @@ CREATE INDEX idx_contacts_user1    ON contacts(user_id_1);
 CREATE INDEX idx_contacts_user2    ON contacts(user_id_2);
 CREATE INDEX idx_contacts_active   ON contacts(active, user_id_1);
 CREATE INDEX idx_contacts_strength ON contacts(connection_strength DESC);
--- Opcional:
+-- Optional:
 -- CREATE INDEX idx_contacts_last_updated_by ON contacts(last_updated_by) WHERE last_updated_by IS NOT NULL;
 ```
 ---
 
-### 11. Tabla `invitation_links`
+### 11. Table `invitation_links`
 
 ```sql
 CREATE TABLE invitation_links (
@@ -397,7 +400,7 @@ CREATE INDEX idx_invitation_links_creator        ON invitation_links(creator_id,
 ```
 ---
 
-### 12. Tabla `invitation_acceptances`
+### 12. Table `invitation_acceptances`
 
 ```sql
 CREATE TABLE invitation_acceptances (
@@ -405,7 +408,7 @@ CREATE TABLE invitation_acceptances (
   invitation_link_id  UUID      NOT NULL REFERENCES invitation_links(id) ON DELETE CASCADE,
   user_id             UUID      NOT NULL REFERENCES users(id) ON DELETE CASCADE,
 
-  -- [NEW] Canal utilizado para aceptar (telemetría/analítica)
+  -- [NEW] Channel used for acceptance (telemetry/analytics)
   accepted_via        VARCHAR   NULL
                         CHECK (accepted_via IN ('web','email','link')),
 
@@ -418,7 +421,7 @@ CREATE INDEX idx_invitation_acceptances_user ON invitation_acceptances(user_id);
 ```
 ---
 
-### 13. Tabla `notifications`
+### 13. Table `notifications`
 
 ```sql
 CREATE TABLE notifications (
@@ -434,10 +437,10 @@ CREATE TABLE notifications (
   related_id UUID      NULL,
   seen       BOOLEAN   NOT NULL DEFAULT FALSE,
 
-  -- [NEW] Prioridad de la notificación (1=normal, 2=alta, etc.)
+  -- [NEW] Notification priority (1 = normal, 2 = high, etc.)
   priority   SMALLINT  NOT NULL DEFAULT 1, -- reserved for importance
 
-  -- [NEW] Fecha/hora programada para recordatorios
+  -- [NEW] Scheduled date/time for reminders
   scheduled_at TIMESTAMPTZ NULL,           -- reserved for reminders
 
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -447,12 +450,12 @@ CREATE TABLE notifications (
 CREATE INDEX idx_notifications_user_seen ON notifications(user_id, seen, created_at);
 CREATE INDEX idx_notifications_type      ON notifications(type, created_at);
 CREATE INDEX idx_notifications_unseen    ON notifications(user_id, created_at) WHERE seen = FALSE;
--- Opcional (bandejas por prioridad):
+-- Optional (priority-based inboxes):
 -- CREATE INDEX idx_notifications_priority ON notifications(user_id, priority DESC, created_at DESC);
 ```
 ---
 
-### 14. Tabla `user_interaction_logs`
+### 14. Table `user_interaction_logs`
 
 ```sql
 CREATE TABLE user_interaction_logs (
@@ -469,7 +472,7 @@ CREATE INDEX idx_user_logs_event ON user_interaction_logs(event_type, timestamp)
 ```
 ---
 
-### 15. Tabla `user_notification_settings`
+### 15. Table `user_notification_settings`
 
 ```sql
 CREATE TABLE user_notification_settings (
@@ -488,7 +491,7 @@ CREATE INDEX idx_uns_delivery_method ON user_notification_settings(delivery_meth
 ```
 ---
 
-### 16. Tabla `contact_requests`
+### 16. Table `contact_requests`
 
 ```sql
 CREATE TABLE contact_requests (
@@ -512,7 +515,7 @@ CREATE INDEX idx_contact_requests_requested ON contact_requests(requested_id, st
 ```
 ---
 
-### 17. Tabla `plan_categories_map`
+### 17. Table `plan_categories_map`
 
 ```sql
 CREATE TABLE plan_categories_map (
@@ -555,7 +558,7 @@ CREATE TABLE user_affinities (
   user_id_b     UUID    NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   affinity      REAL    NOT NULL,
 
-  -- [NEW] Contexto de la afinidad (p. ej., "plans", "contacts")
+  -- [NEW] Affinity context (e.g. "plans", "contacts")
   context       VARCHAR NULL, -- reserved for future ML context
 
   model_version TEXT   NOT NULL DEFAULT 'v1',
@@ -570,17 +573,17 @@ CREATE INDEX idx_ua_affinity ON user_affinities(affinity DESC);
 ```
 ---
 
-### 20. Tabla `mcp_context_snapshots` (reserved for future integration)
+### 20. Table `mcp_context_snapshots` (reserved for future integration)
 
-> 🧠 **Propósito:** Esta tabla está reservada para la integración futura de Yokedo con el estándar **Model Context Protocol (MCP)**.  
-> Permitirá almacenar “snapshots” del contexto social, temporal y semántico de cada usuario, para ser consultados o compartidos con agentes externos (LLMs, pipelines de IA, etc.).  
-> **No se incluye** en las migraciones iniciales del MVP.
+> 🧠 **Purpose:** This table is reserved for Yokedo’s future integration with the **Model Context Protocol (MCP)**.  
+> It will allow storing “snapshots” of each user’s social, temporal, and semantic context, to be queried or shared with external agents (LLMs, AI pipelines, etc.).  
+> **It is not included** in the initial MVP migrations.
 
 ```sql
 CREATE TABLE mcp_context_snapshots (
   id            UUID      PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id       UUID      NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  context_json  JSONB     NOT NULL, -- estado contextual completo (disponibilidades, afinidades, planes activos)
+  context_json  JSONB     NOT NULL, -- Full contextual state (availabilities, affinities, active plans)
   source        VARCHAR   NOT NULL
                   CHECK (source IN ('agent','system','user')),
   model_version TEXT      NOT NULL DEFAULT 'v1',
@@ -592,7 +595,7 @@ CREATE INDEX idx_mcp_snapshots_source ON mcp_context_snapshots(source);
 ```
 ---
 
-## 🚀 PASO 3: Triggers `updated_at`
+## 🚀 STEP 3: Triggers `updated_at`
 
 ```sql
 CREATE OR REPLACE FUNCTION update_updated_at_column()
@@ -603,7 +606,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Aplica a todas las tablas que tienen columna updated_at
+-- Applies to all tables that have an updated_at column
 CREATE TRIGGER trg_users_updated_at
   BEFORE UPDATE ON users
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
@@ -638,21 +641,12 @@ CREATE TRIGGER trg_availability_day_overrides_updated_at
 ```
 ---
 
-## 🎯 Validación Final
+## Notes
+- Schema validated against PostgreSQL 15
+- Designed to support future ML features (embeddings, similarity logs)
 
-* ✔️ **Sintaxis SQL**: sin errores, todos los `CHECK` completos.  
-* ✔️ **Integridad**: FK a tablas existentes, orden correcto.  
-* ✔️ **Índices**: compuestos y parciales donde corresponde.  
-* ✔️ **Seguridad**: UUID, verificaciones, preparado para rate-limiting.  
-* ✔️ **Auditoría**: triggers automáticos para `updated_at`.  
-* ✔️ **ML/IA**: preparado para embeddings y logs.  
-* ✔️ **Extensibilidad segura**: campos *reserved for future use* añadidos como cambios **aditivos** (no rompen el modelo).
+### Internationalization
 
-```sql
--- ============================================================
--- 🗒️ Notas internas
--- Versión: v1.1
--- Cambio principal: introducción de disponibilidad habitual y overrides diarios
--- Fecha: 2025-12-29
--- ============================================================
-```
+> **Important Note:** Category names and descriptions are currently stored in Spanish, as the MVP is initially targeted at the Spanish market.  
+> These values are considered user-facing content and are expected to be externalized or internationalized (i18n) in a future phase, without without altering the core schema design.
+
