@@ -70,7 +70,7 @@ CREATE TABLE users (
   country         VARCHAR   NULL,
   timezone        VARCHAR   NOT NULL,
 
--- [NEW] User preferred language (i18n), e.g. 'es', 'en', 'es-ES'
+-- User preferred language (i18n), e.g. 'es', 'en', 'es-ES'
   language        VARCHAR(5) NULL
                     CHECK (language ~ '^[a-z]{2}(-[A-Z]{2})?$'),
 
@@ -86,7 +86,7 @@ CREATE TABLE users (
   private_mode    BOOLEAN   NOT NULL DEFAULT FALSE,
   social_paused   BOOLEAN   NOT NULL DEFAULT FALSE,
 
-  -- Verifications y security
+  -- Verifications and security
   email_verified       BOOLEAN NOT NULL DEFAULT FALSE,
   phone_number         VARCHAR NULL,
   phone_verified       BOOLEAN NOT NULL DEFAULT FALSE,
@@ -94,6 +94,10 @@ CREATE TABLE users (
   failed_login_attempts INTEGER NOT NULL DEFAULT 0,
   locked_until         TIMESTAMPTZ NULL,
   date_of_birth        DATE    NULL,
+
+  -- Soft delete
+  is_deleted            BOOLEAN NOT NULL DEFAULT FALSE,
+  deleted_at            TIMESTAMPTZ NULL,
 
   -- Timestamps
   created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
