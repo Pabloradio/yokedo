@@ -1,5 +1,5 @@
-# Yokedo – Modelo de Datos v1.0 (MCP-ready)
-**Última actualización:** 2025-11-02 15:26 UTC
+# Yokedo – Modelo de Datos v1.1 (MCP-ready)
+**Última actualización:** 2025-12-29 15:26 UTC
 
 ---
 
@@ -22,21 +22,23 @@ CREATE EXTENSION IF NOT EXISTS citext;
 3. **interests**  
 4. **user_interests**  
 5. **plan_category**  
-6. **availabilities**  
-7. **plan_proposals**  
-8. **contacts**  
-9. **invitation_links**  
-10. **invitation_acceptances**  
-11. **notifications**  
-12. **user_interaction_logs**  
-13. **user_notification_settings**  
-14. **contact_requests**  
-15. **plan_categories_map**  
-16. **semantic_similarity_log**  
-17. **user_affinities**  
-18. **mcp_context_snapshots** (documentada; reservada)
+6. **availability_weekly_templates** ⬅️ **[NEW]**  
+7. **availability_day_overrides** ⬅️ **[NEW]**  
+8. **availabilities**  
+9. **plan_proposals**  
+10. **contacts**  
+11. **invitation_links**  
+12. **invitation_acceptances**  
+13. **notifications**  
+14. **user_interaction_logs**  
+15. **user_notification_settings**  
+16. **contact_requests**  
+17. **plan_categories_map**  
+18. **semantic_similarity_log**  
+19. **user_affinities**  
+20. **mcp_context_snapshots** (documentada; reservada)
 
-> Todas las DDL incluyen tipos, `CHECK`, `FK`, índices y comentarios. Los campos marcados con `-- [NEW]` son extensiones seguras **aditivas** y algunos están documentados como *reserved for future use*.
+> Todas las DDL incluyen tipos, `CHECK`, `FK`, índices y comentarios. Los campos marcados con `-- [NEW]` son extensiones seguras **aditivas**.
 
 ---
 
@@ -69,7 +71,7 @@ CREATE TABLE users (
 
   -- [NEW] Idioma preferido del usuario (i18n). Ej.: 'es', 'en', 'es-ES'
   language        VARCHAR(5) NULL
-                    CHECK (language ~ '^[a-z]2(-[A-Z]2)?$'),
+                    CHECK (language ~ '^[a-z]{2}(-[A-Z]{2})?$'),
 
   frequency_social VARCHAR  NULL
                     CHECK (frequency_social IN (
@@ -185,7 +187,82 @@ INSERT INTO plan_category (name, description) VALUES
 ```
 ---
 
-### 6. Tabla `availabilities`
+### 6. Tabla `availability_weekly_templates` **[NEW]**
+
+```sql
+CREATE TABLE availability_weekly_templates (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+  user_id UUID NOT NULL
+    REFERENCES users(id)
+    ON DELETE CASCADE,
+
+  weekday SMALLINT NOT NULL
+    CHECK (weekday BETWEEN 1 AND 7),
+    -- ISO 8601: 1 = Monday, 7 = Sunday
+
+  start_minute SMALLINT NOT NULL
+    CHECK (start_minute BETWEEN 0 AND 1439),
+
+  end_minute SMALLINT NOT NULL
+    CHECK (end_minute BETWEEN 1 AND 1440),
+
+  timezone VARCHAR(50) NOT NULL,
+    -- IANA timezone, e.g. 'Europe/Madrid'
+
+  plan_text TEXT NULL,
+    -- Texto libre opcional: "¿Qué te apetece hacer?"
+
+  language_code VARCHAR(5) NOT NULL DEFAULT 'es'
+    CHECK (language_code ~ '^[a-z]{2}(-[A-Z]{2})?$'),
+
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+  CHECK (start_minute < end_minute)
+);
+
+CREATE INDEX idx_awd_user ON availability_weekly_templates(user_id);
+CREATE INDEX idx_awd_user_weekday ON availability_weekly_templates(user_id, weekday);
+```
+
+**Semántica:** reglas semanales por defecto. No representan disponibilidad real ni histórica. Se aplican solo si no existe override ni disponibilidad puntual para una fecha concreta.
+
+---
+
+### 7. Tabla `availability_day_overrides` **[NEW]**
+
+```sql
+CREATE TABLE availability_day_overrides (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+  user_id UUID NOT NULL
+    REFERENCES users(id)
+    ON DELETE CASCADE,
+
+  date DATE NOT NULL,
+    -- Fecha local en la timezone del usuario
+
+  timezone VARCHAR(50) NOT NULL,
+    -- IANA timezone
+
+  override_type VARCHAR(10) NOT NULL
+    CHECK (override_type IN ('replace','clear')),
+    -- replace: usar solo availabilities de ese día
+    -- clear: día sin disponibilidad aunque exista plantilla
+
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+  UNIQUE (user_id, date)
+);
+```
+
+**Semántica:** señal explícita de que una fecha concreta no sigue la plantilla semanal, evitando ambigüedad entre "no definido" y "no disponible".
+
+---
+
+### 8. Tabla `availabilities`
 
 ```sql
 CREATE TABLE availabilities (
@@ -200,7 +277,7 @@ CREATE TABLE availabilities (
 
   -- Idioma en el que se escribió plan_text (ej. 'es', 'en', 'es-ES')
   language_code   VARCHAR(5)  DEFAULT 'es'
-                    CHECK (language_code ~ '^[a-z]2(-[A-Z]2)?$'),
+                    CHECK (language_code ~ '^[a-z]{2}(-[A-Z]{2})?$'),
 
   is_flexible     BOOLEAN     NOT NULL DEFAULT FALSE,
   is_synthetic    BOOLEAN     NOT NULL DEFAULT FALSE,
@@ -229,7 +306,7 @@ CREATE INDEX idx_availabilities_source   ON availabilities(source) WHERE source 
 ```
 ---
 
-### 7. Tabla `plan_proposals`
+### 9. Tabla `plan_proposals`
 
 ```sql
 CREATE TABLE plan_proposals (
@@ -263,7 +340,7 @@ CREATE INDEX idx_plan_proposals_availability ON plan_proposals(availability_id);
 ```
 ---
 
-### 8. Tabla `contacts`
+### 10. Tabla `contacts`
 
 ```sql
 CREATE TABLE contacts (
@@ -294,7 +371,7 @@ CREATE INDEX idx_contacts_strength ON contacts(connection_strength DESC);
 ```
 ---
 
-### 9. Tabla `invitation_links`
+### 11. Tabla `invitation_links`
 
 ```sql
 CREATE TABLE invitation_links (
@@ -320,7 +397,7 @@ CREATE INDEX idx_invitation_links_creator        ON invitation_links(creator_id,
 ```
 ---
 
-### 10. Tabla `invitation_acceptances`
+### 12. Tabla `invitation_acceptances`
 
 ```sql
 CREATE TABLE invitation_acceptances (
@@ -341,7 +418,7 @@ CREATE INDEX idx_invitation_acceptances_user ON invitation_acceptances(user_id);
 ```
 ---
 
-### 11. Tabla `notifications`
+### 13. Tabla `notifications`
 
 ```sql
 CREATE TABLE notifications (
@@ -375,7 +452,7 @@ CREATE INDEX idx_notifications_unseen    ON notifications(user_id, created_at) W
 ```
 ---
 
-### 12. Tabla `user_interaction_logs`
+### 14. Tabla `user_interaction_logs`
 
 ```sql
 CREATE TABLE user_interaction_logs (
@@ -392,7 +469,7 @@ CREATE INDEX idx_user_logs_event ON user_interaction_logs(event_type, timestamp)
 ```
 ---
 
-### 13. Tabla `user_notification_settings`
+### 15. Tabla `user_notification_settings`
 
 ```sql
 CREATE TABLE user_notification_settings (
@@ -411,7 +488,7 @@ CREATE INDEX idx_uns_delivery_method ON user_notification_settings(delivery_meth
 ```
 ---
 
-### 14. Tabla `contact_requests`
+### 16. Tabla `contact_requests`
 
 ```sql
 CREATE TABLE contact_requests (
@@ -435,7 +512,7 @@ CREATE INDEX idx_contact_requests_requested ON contact_requests(requested_id, st
 ```
 ---
 
-### 15. Tabla `plan_categories_map`
+### 17. Tabla `plan_categories_map`
 
 ```sql
 CREATE TABLE plan_categories_map (
@@ -453,7 +530,7 @@ CREATE INDEX idx_pcm_availability ON plan_categories_map(availability_id);
 ```
 ---
 
-### 16. Tabla `semantic_similarity_log`
+### 18. Tabla `semantic_similarity_log`
 
 ```sql
 CREATE TABLE semantic_similarity_log (
@@ -470,7 +547,7 @@ CREATE INDEX idx_ssl_score     ON semantic_similarity_log(score DESC);
 ```
 ---
 
-### 17. Tabla `user_affinities`
+### 19. Tabla `user_affinities`
 
 ```sql
 CREATE TABLE user_affinities (
@@ -493,7 +570,7 @@ CREATE INDEX idx_ua_affinity ON user_affinities(affinity DESC);
 ```
 ---
 
-### 18. Tabla `mcp_context_snapshots` (reserved for future integration)
+### 20. Tabla `mcp_context_snapshots` (reserved for future integration)
 
 > 🧠 **Propósito:** Esta tabla está reservada para la integración futura de Yokedo con el estándar **Model Context Protocol (MCP)**.  
 > Permitirá almacenar “snapshots” del contexto social, temporal y semántico de cada usuario, para ser consultados o compartidos con agentes externos (LLMs, pipelines de IA, etc.).  
@@ -550,6 +627,14 @@ CREATE TRIGGER trg_user_notification_settings_updated_at
 CREATE TRIGGER trg_contact_requests_updated_at
   BEFORE UPDATE ON contact_requests
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER trg_availability_weekly_templates_updated_at
+  BEFORE UPDATE ON availability_weekly_templates
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER trg_availability_day_overrides_updated_at
+  BEFORE UPDATE ON availability_day_overrides
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 ```
 ---
 
@@ -562,12 +647,12 @@ CREATE TRIGGER trg_contact_requests_updated_at
 * ✔️ **Auditoría**: triggers automáticos para `updated_at`.  
 * ✔️ **ML/IA**: preparado para embeddings y logs.  
 * ✔️ **Extensibilidad segura**: campos *reserved for future use* añadidos como cambios **aditivos** (no rompen el modelo).
+
 ```sql
 -- ============================================================
 -- 🗒️ Notas internas
--- Validación manual completada el 2025-11-02 15:26 UTC
--- Compatible con Alembic y PostgreSQL 15+
--- Preparado para migraciones CI/CD y futuras integraciones MCP
--- Session: 2025-10-26 / MCP-ready revision
+-- Versión: v1.1
+-- Cambio principal: introducción de disponibilidad habitual y overrides diarios
+-- Fecha: 2025-12-29
 -- ============================================================
 ```
