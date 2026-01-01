@@ -1,9 +1,8 @@
+# app/models/user.py
 import uuid
 from sqlalchemy import Column, String, Boolean, DateTime, func
 from sqlalchemy.dialects.postgresql import UUID, CITEXT
-from sqlalchemy.orm import declarative_base
-
-Base = declarative_base()
+from app.models.base import Base
 
 class User(Base):
     __tablename__ = "users"
@@ -22,6 +21,9 @@ class User(Base):
     timezone = Column(String(50), nullable=True, server_default="Europe/Madrid")
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+    last_login_at = Column(DateTime(timezone=True), nullable=True)
+    is_deleted = Column(Boolean, default=False, nullable=False)
+    deleted_at = Column(DateTime(timezone=True), nullable=True)
 
     def __repr__(self):
         return f"<User {self.alias}>"
