@@ -40,6 +40,8 @@ env/
 venv/
 .venv/
 pip-log.txt
+.pytest_cache/
+*.pyc
 
 # Virtual environments
 .venv/
