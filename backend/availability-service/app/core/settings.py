@@ -8,11 +8,6 @@ class Settings(BaseSettings):
     postgres_user: str
     postgres_password: str
 
-    # JWT configuration
-    jwt_secret_key: str
-    jwt_algorithm: str = "HS256"
-    access_token_expire_minutes: int = 60
-
     # Pydantic v2 settings configuration
     # This replaces the previous SettingsConfigDict to avoid Pylance warnings.
     model_config = {

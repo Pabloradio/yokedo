@@ -1,1 +1,1 @@
-#empty is fine
+from . import availability  # noqa: F401
