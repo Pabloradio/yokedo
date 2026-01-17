@@ -1,4 +1,7 @@
 assets/
+backups/
+*.sql
+*.dump
 
 # Database
 *.db
