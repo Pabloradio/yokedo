@@ -1,44 +1,66 @@
 from logging.config import fileConfig
+import asyncio
 
 from alembic import context
 from sqlalchemy import pool
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
-# --- Import configuration and models ---
 from app.database import DATABASE_URL
-from app.models.base import Base
+from app.migrations.metadata import migration_metadata
 
-# IMPORTANT:
-# Import models so they are registered into Base.metadata
-import app.models.availability  # noqa: F401
-
-# --- Alembic config ---
 config = context.config
-
-# Use the ASYNC database URL directly (asyncpg)
 config.set_main_option("sqlalchemy.url", DATABASE_URL)
 
-# --- Logging configuration ---
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# --- Target metadata for autogenerate ---
-target_metadata = Base.metadata
+target_metadata = migration_metadata
+
+# ---------------------------------------------------------------------
+# Autogenerate scope control
+# ---------------------------------------------------------------------
+
+OWNED_TABLES = {
+    "availability_weekly_templates",
+    "availability_day_overrides",
+    "availabilities",
+    "alembic_version_availability",
+}
+
+EXTERNAL_TABLES = {
+    "users",
+    "user_sessions",
+    "alembic_version_auth",
+    "plan_category",
+}
+
+def include_object(object_, name, type_, reflected, compare_to):
+    """
+    Restrict Alembic autogenerate to objects owned by availability-service.
+
+    - External tables are excluded even if present in metadata as stubs.
+    - Only owned tables (and their columns/constraints/indexes) are considered.
+    """
+    if type_ == "table":
+        if name in EXTERNAL_TABLES:
+            return False
+        return name in OWNED_TABLES
+
+    parent_table = getattr(object_, "table", None)
+    if parent_table is not None:
+        return parent_table.name in OWNED_TABLES
+
+    return True
 
 
 def run_migrations_offline() -> None:
-    """
-    Run migrations in 'offline' mode.
-
-    This configures Alembic with just the database URL.
-    No actual DB connection is created.
-    """
     url = config.get_main_option("sqlalchemy.url")
 
     context.configure(
         url=url,
         target_metadata=target_metadata,
         version_table="alembic_version_availability",
+        include_object=include_object,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
     )
@@ -48,16 +70,11 @@ def run_migrations_offline() -> None:
 
 
 def do_run_migrations(connection) -> None:
-    """
-    Configure Alembic context and run migrations.
-
-    This function is executed in a synchronous context,
-    even though the engine is async.
-    """
     context.configure(
         connection=connection,
         target_metadata=target_metadata,
         version_table="alembic_version_availability",
+        include_object=include_object,
     )
 
     with context.begin_transaction():
@@ -65,9 +82,6 @@ def do_run_migrations(connection) -> None:
 
 
 async def run_migrations_online() -> None:
-    """
-    Run migrations in 'online' mode using an async engine.
-    """
     connectable = async_engine_from_config(
         config.get_section(config.config_ini_section, {}),
         prefix="sqlalchemy.",
@@ -75,7 +89,6 @@ async def run_migrations_online() -> None:
     )
 
     async with connectable.connect() as async_connection:
-        # Run migrations in a synchronous context
         await async_connection.run_sync(do_run_migrations)
 
     await connectable.dispose()
@@ -84,5 +97,4 @@ async def run_migrations_online() -> None:
 if context.is_offline_mode():
     run_migrations_offline()
 else:
-    import asyncio
     asyncio.run(run_migrations_online())
