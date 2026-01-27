@@ -1,4 +1,4 @@
-# app/migrations/metadata.py
+# app/migrations/migration_metadata.py
 
 """
 Migration-only metadata for availability-service.
@@ -44,13 +44,6 @@ users = Table(
     "users",
     migration_metadata,
     Column("id", UUID(as_uuid=True), primary_key=True),
-)
-
-# Owned by another domain (global schema)
-plan_category = Table(
-    "plan_category",
-    migration_metadata,
-    Column("id", Integer, primary_key=True),
 )
 
 # ---------------------------------------------------------------------
@@ -141,12 +134,7 @@ availabilities = Table(
     Column("is_synthetic", Boolean, nullable=False, server_default=text("false")),
     Column("source", String, nullable=True),
     Column("is_recurring", Boolean, nullable=False, server_default=text("false")),
-    Column(
-        "category_id",
-        Integer,
-        ForeignKey("plan_category.id"),
-        nullable=True,
-    ),
+    Column("category_id", Integer, nullable=True),
     Column("created_at", DateTime(timezone=True), nullable=False, server_default=text("NOW()")),
     Column("updated_at", DateTime(timezone=True), nullable=False, server_default=text("NOW()")),
     CheckConstraint("start_time_utc < end_time_utc", name="ck_availabilities_start_lt_end"),

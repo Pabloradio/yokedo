@@ -69,7 +69,6 @@ class AvailabilityWeeklyTemplate(Base):
     language_code: Mapped[str] = mapped_column(String(5), server_default="es")
 
     # Optional structured category
-    category_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("plan_category.id"), nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
@@ -139,7 +138,7 @@ class Availability(Base):
     start_time_utc: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     end_time_utc: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
-    timezone: Mapped[str] = mapped_column(String, nullable=False)
+    timezone: Mapped[str] = mapped_column(String(50), nullable=False)
 
     plan_text: Mapped[str | None] = mapped_column(Text, nullable=True)
 
@@ -151,7 +150,7 @@ class Availability(Base):
     source: Mapped[str | None] = mapped_column(String, nullable=True)
     is_recurring: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
 
-    category_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("plan_category.id"), nullable=True)
+    category_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
