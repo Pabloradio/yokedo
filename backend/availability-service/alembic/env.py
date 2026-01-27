@@ -6,7 +6,7 @@ from sqlalchemy import pool
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from app.database import DATABASE_URL
-from app.migrations.metadata import migration_metadata
+from app.migrations.migration_metadata import migration_metadata
 
 config = context.config
 config.set_main_option("sqlalchemy.url", DATABASE_URL)
