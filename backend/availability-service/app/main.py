@@ -1,11 +1,14 @@
 from fastapi import FastAPI
-from app.routers import auth   # <-- Import nuevo
+from app.routers.debug_availability import router as debug_availability_router
 
-app = FastAPI(title="Yokedo Auth Service")
 
-# Registrar router de autenticación
-app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
+
+app = FastAPI(title="Yokedo Availability Service")
+
+# Register availability debug router
+app.include_router(debug_availability_router)
 
 @app.get("/")
 def root():
-    return {"message": "Auth service running 🚀"}
+    return {"message": "Availability service running 🚀"}
+
