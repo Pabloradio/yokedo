@@ -10,12 +10,18 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.errors import (
+    ForbiddenError,
+    NotFoundError,
+    InvalidTimeRangeError
+)
 
 from app.core.dependencies import get_async_session
 from app.services.availability_engine import (
     AvailabilityEngine,
     PunctualAvailabilityCreate,
-    PunctualAvailabilityUpdate
+    PunctualAvailabilityUpdate,
+    DayAvailabilityQuery,
 )
 
 
@@ -96,25 +102,51 @@ class AvailabilityOut(BaseModel):
         from_attributes = True
 
 
+def _raise_http_from_domain_error(err: Exception) -> None:
+    if isinstance(err, NotFoundError):
+        raise HTTPException(status_code=404, detail=str(err))
+    if isinstance(err, ForbiddenError):
+        raise HTTPException(status_code=403, detail=str(err))
+    if isinstance(err, InvalidTimeRangeError):
+        raise HTTPException(status_code=400, detail=str(err))
+
+    raise HTTPException(status_code=500, detail="internal server error")
+
+
+class DayAvailabilitySlotOut(BaseModel):
+    start_time_utc: datetime
+    end_time_utc: datetime
+    timezone: str
+    source: str
+    plan_text: Optional[str] = None
+    language_code: str
+
+    class Config:
+        from_attributes = True
+
+
 @router.post("/punctual", response_model=AvailabilityOut)
 async def create_punctual(
     payload: PunctualAvailabilityIn,
     session: AsyncSession = Depends(get_async_session),
 ) -> AvailabilityOut:
     engine = AvailabilityEngine()
-    created = await engine.create_punctual_with_overlap_replacement(
-        session=session,
-        payload=PunctualAvailabilityCreate(
-            user_id=payload.user_id,
-            start_time_utc=payload.start_time_utc,
-            end_time_utc=payload.end_time_utc,
-            timezone=payload.timezone,
-            plan_text=payload.plan_text,
-            language_code=payload.language_code,
-            is_flexible=payload.is_flexible,
-            category_id=payload.category_id,
-        ),
-    )
+    try:
+        created = await engine.create_punctual_with_overlap_replacement(
+            session=session,
+            payload=PunctualAvailabilityCreate(
+                user_id=payload.user_id,
+                start_time_utc=payload.start_time_utc,
+                end_time_utc=payload.end_time_utc,
+                timezone=payload.timezone,
+                plan_text=payload.plan_text,
+                language_code=payload.language_code,
+                is_flexible=payload.is_flexible,
+                category_id=payload.category_id,
+            ),
+        )
+    except Exception as e:
+        _raise_http_from_domain_error(e)
 
     return AvailabilityOut.model_validate(created)
 
@@ -140,26 +172,38 @@ async def update_punctual(
     try:
         updated = await engine.update_punctual_with_overlap_replacement(
             session=session,
-            user_id=payload.user_id,  # MVP: user_id comes from client input. Replace with authenticated user_id when auth integration is added.
+            user_id=payload.user_id,
             availability_id=availability_id,
             payload=domain_payload,
         )
-    except ValueError as e:
-        msg = str(e)
-
-        if msg == "availability not found":
-            raise HTTPException(status_code=404, detail=msg)
-        if msg == "availability does not belong to user":
-            raise HTTPException(status_code=403, detail=msg)
-        if msg == "only non-synthetic punctual slots can be edited in MVP":
-            raise HTTPException(status_code=403, detail=msg)
-        if msg == "start_time_utc must be < end_time_utc":
-            raise HTTPException(status_code=400, detail=msg)
-
-        # Unknown ValueError -> keep it explicit (still a 500, but with a clear message)
-        raise HTTPException(status_code=500, detail=msg)
+    except Exception as e:
+        _raise_http_from_domain_error(e)
 
     return AvailabilityOut.model_validate(updated)
 
 
+@router.get("/day", response_model=list[DayAvailabilitySlotOut])
+async def get_day_availability(
+    user_id: uuid.UUID,
+    date: str,
+    timezone: str,
+    session: AsyncSession = Depends(get_async_session),
+) -> list[DayAvailabilitySlotOut]:
+    # Parse date (YYYY-MM-DD) explicitly to control error messages
+    try:
+        day = datetime.strptime(date, "%Y-%m-%d").date()
+    except ValueError:
+        raise HTTPException(status_code=400, detail="date must be YYYY-MM-DD")
+
+    engine = AvailabilityEngine()
+    slots = await engine.get_day_availability(
+        session=session,
+        payload=DayAvailabilityQuery(
+            user_id=user_id,
+            date=day,
+            timezone=timezone,
+        ),
+    )
+
+    return [DayAvailabilitySlotOut.model_validate(s) for s in slots]
 

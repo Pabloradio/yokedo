@@ -29,6 +29,16 @@ class NotFoundError(DomainError):
 
 
 @dataclass(frozen=True)
+class NotFoundByKeyError(DomainError):
+    resource: str
+    key: str
+    message: Optional[str] = None
+
+    def __str__(self) -> str:
+        return self.message or f"{self.resource} not found ({self.key})"
+
+
+@dataclass(frozen=True)
 class ForbiddenError(DomainError):
     resource: str
     resource_id: uuid.UUID

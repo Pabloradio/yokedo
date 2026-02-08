@@ -1,26 +1,29 @@
+# app/services/availability_engine.py
+
 from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from typing import Optional
 
-from sqlalchemy import delete, select, text
+from sqlalchemy import delete, select, text, func
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.dialects.postgresql import insert
 
-from app.models.availability import Availability
-
-from app.core.errors import (
-    InvalidTimeRangeError,
-    OverlapConflictError,
+from app.models.availability import (
+    Availability,
+    AvailabilityDayOverride,
 )
-from app.models.availability import AvailabilityWeeklyTemplate
 from app.core.errors import (
     ForbiddenError,
     NotFoundError,
+    InvalidTimeRangeError,
+    OverlapConflictError,
+    NotFoundByKeyError
 )
-
-
+from app.models.availability import AvailabilityWeeklyTemplate
+from zoneinfo import ZoneInfo
 
 
 @dataclass(frozen=True)
@@ -58,7 +61,6 @@ class WeeklyTemplateSlotCreate:
     language_code: str = "es"
 
 
-
 @dataclass(frozen=True)
 class WeeklyTemplateSlotUpdate:
     weekday: Optional[int] = None
@@ -68,6 +70,31 @@ class WeeklyTemplateSlotUpdate:
     plan_text: Optional[str] = None
     language_code: Optional[str] = None
     
+
+@dataclass(frozen=True)
+class DayOverrideSet:
+    user_id: uuid.UUID
+    date: date  # local date in user's timezone
+    timezone: str
+    override_type: str  # "clear" | "replace"
+
+
+@dataclass(frozen=True)
+class DayAvailabilityQuery:
+    user_id: uuid.UUID
+    date: date  # local date in query timezone
+    timezone: str  # IANA timezone for "day" boundaries
+
+
+@dataclass(frozen=True)
+class AvailabilitySlot:
+    start_time_utc: datetime
+    end_time_utc: datetime
+    timezone: str
+    source: str  # "punctual" | "habitual"
+    plan_text: Optional[str] = None
+    language_code: str = "es"
+
 
 class AvailabilityEngine:
     """
@@ -134,13 +161,18 @@ class AvailabilityEngine:
             stmt = select(Availability).where(Availability.id == availability_id)
             row = (await session.execute(stmt)).scalar_one_or_none()
             if row is None:
-                raise ValueError("availability not found")
+                raise NotFoundError(resource="availability", resource_id=availability_id)
 
             if row.user_id != user_id:
-                raise ValueError("availability does not belong to user")
+                raise ForbiddenError(resource="availability", resource_id=availability_id)
 
             if row.source != "punctual" or row.is_synthetic:
-                raise ValueError("only non-synthetic punctual slots can be edited in MVP")
+                raise ForbiddenError(
+                    resource="availability",
+                    resource_id=availability_id,
+                    message="only non-synthetic punctual slots can be edited in MVP",
+                )
+
 
             # --- MOD 1: compute the final time range (existing + patch) ---
             # PATCH may omit start/end, so we must validate using the final values.
@@ -315,6 +347,195 @@ class AvailabilityEngine:
             await session.flush()
             return row
 
+
+    async def set_day_override(
+        self,
+        session: AsyncSession,
+        payload: DayOverrideSet,
+    ) -> AvailabilityDayOverride:
+        """
+        Upsert a single override per (user_id, local date).
+
+        MVP semantics:
+        - Both "clear" and "replace" disable weekly templates for that day in projection.
+        - "replace" is kept for future semantics (special day definition).
+        """
+        async with session.begin():
+            await _advisory_lock_user(session, payload.user_id)
+
+            stmt = (
+                insert(AvailabilityDayOverride)
+                .values(
+                    user_id=payload.user_id,
+                    date=payload.date,
+                    timezone=payload.timezone,
+                    override_type=payload.override_type,
+                )
+                .on_conflict_do_update(
+                    index_elements=[AvailabilityDayOverride.user_id, AvailabilityDayOverride.date],
+                    set_={
+                        "timezone": payload.timezone,
+                        "override_type": payload.override_type,
+                        "updated_at": func.now(),
+                    },
+                )
+                .returning(AvailabilityDayOverride.id)
+            )
+
+            override_id = (await session.execute(stmt)).scalar_one()
+
+            # Load ORM entity in the same transaction (guarantees it exists)
+            row_stmt = select(AvailabilityDayOverride).where(AvailabilityDayOverride.id == override_id)
+            row = (await session.execute(row_stmt)).scalar_one()
+
+            # Refresh to ensure we return DB-populated timestamps
+            await session.refresh(row)
+            return row
+
+
+    async def get_day_override(
+        self,
+        session: AsyncSession,
+        user_id: uuid.UUID,
+        date_: date,
+    ) -> AvailabilityDayOverride:
+        async with session.begin():
+            stmt = select(AvailabilityDayOverride).where(
+                AvailabilityDayOverride.user_id == user_id,
+                AvailabilityDayOverride.date == date_,
+            )
+            row = (await session.execute(stmt)).scalar_one_or_none()
+            if row is None:
+                raise NotFoundByKeyError(
+                    resource="day_override",
+                    key=f"user_id={user_id}, date={date_.isoformat()}",
+                )
+
+            return row
+
+    async def delete_day_override(
+        self,
+        session: AsyncSession,
+        user_id: uuid.UUID,
+        date_: date,
+    ) -> AvailabilityDayOverride:
+        async with session.begin():
+            await _advisory_lock_user(session, user_id)
+
+            stmt = select(AvailabilityDayOverride).where(
+                AvailabilityDayOverride.user_id == user_id,
+                AvailabilityDayOverride.date == date_,
+            )
+            row = (await session.execute(stmt)).scalar_one_or_none()
+            if row is None:
+                raise NotFoundByKeyError(
+                    resource="day_override",
+                    key=f"user_id={user_id}, date={date_.isoformat()}",
+                )
+
+
+
+            await session.delete(row)
+            await session.flush()
+            return row
+
+    async def get_day_availability(
+        self,
+        session: AsyncSession,
+        payload: DayAvailabilityQuery,
+    ) -> list[AvailabilitySlot]:
+        """
+        Returns projected availability slots for a given local day (defined by payload.timezone).
+
+        Composition (MVP):
+        - Punctual slots from `availabilities` that overlap the day's UTC range.
+        - Weekly template projection for that ISO weekday ONLY IF no day override exists for (user_id, date).
+        """
+        day_start_utc, day_end_utc = _local_day_to_utc_range(payload.date, payload.timezone)
+
+        # --- 1) Punctual slots overlapping the day range ---
+        punctual_stmt = (
+            select(Availability)
+            .where(Availability.user_id == payload.user_id)
+            .where(Availability.source == "punctual")
+            .where(Availability.is_synthetic.is_(False))
+            .where(Availability.start_time_utc < day_end_utc)
+            .where(Availability.end_time_utc > day_start_utc)
+            .order_by(Availability.start_time_utc.asc())
+        )
+        punctual_rows = (await session.execute(punctual_stmt)).scalars().all()
+
+        punctual_slots = [
+            AvailabilitySlot(
+                start_time_utc=row.start_time_utc,
+                end_time_utc=row.end_time_utc,
+                timezone=row.timezone,
+                source="punctual",
+                plan_text=row.plan_text,
+                language_code=row.language_code,
+            )
+            for row in punctual_rows
+        ]
+
+        # --- 2) If a day override exists, habitual projection is disabled ---
+        override_stmt = select(AvailabilityDayOverride.id).where(
+            AvailabilityDayOverride.user_id == payload.user_id,
+            AvailabilityDayOverride.date == payload.date,
+        )
+        override_exists = (await session.execute(override_stmt)).scalar_one_or_none() is not None
+        if override_exists:
+            return punctual_slots
+
+        # --- 3) Weekly template projection for that weekday ---
+        weekday = _iso_weekday_for_local_date(payload.date)
+
+        templates_stmt = (
+            select(AvailabilityWeeklyTemplate)
+            .where(AvailabilityWeeklyTemplate.user_id == payload.user_id)
+            .where(AvailabilityWeeklyTemplate.weekday == weekday)
+            .order_by(AvailabilityWeeklyTemplate.start_minute.asc())
+        )
+        templates = (await session.execute(templates_stmt)).scalars().all()
+
+        habitual_slots: list[AvailabilitySlot] = []
+        for tpl in templates:
+            # interpret template in its own timezone (Option A)
+            tz = ZoneInfo(tpl.timezone)
+
+            start_local = datetime(
+                payload.date.year,
+                payload.date.month,
+                payload.date.day,
+                0,
+                0,
+                0,
+                tzinfo=tz,
+            ) + timedelta(minutes=tpl.start_minute)
+
+            end_local = datetime(
+                payload.date.year,
+                payload.date.month,
+                payload.date.day,
+                0,
+                0,
+                0,
+                tzinfo=tz,
+            ) + timedelta(minutes=tpl.end_minute)
+
+            habitual_slots.append(
+                AvailabilitySlot(
+                    start_time_utc=start_local.astimezone(ZoneInfo("UTC")),
+                    end_time_utc=end_local.astimezone(ZoneInfo("UTC")),
+                    timezone=tpl.timezone,
+                    source="habitual",
+                    plan_text=tpl.plan_text,
+                    language_code=tpl.language_code,
+                )
+            )
+
+        # MVP: return both sets concatenated (no merging yet)
+        return sorted(punctual_slots + habitual_slots, key=lambda s: s.start_time_utc)
+
     
     async def _delete_overlapping_punctual(
         self,
@@ -344,7 +565,7 @@ class AvailabilityEngine:
 
 def _validate_range(start: datetime, end: datetime) -> None:
     if start >= end:
-        raise ValueError("start_time_utc must be < end_time_utc")
+        raise InvalidTimeRangeError("start_time_utc must be < end_time_utc")
     
 
 def _validate_weekly_template_range(weekday: int, start_minute: int, end_minute: int) -> None:
@@ -392,3 +613,23 @@ def _uuid_to_pg_advisory_key(value: uuid.UUID) -> int:
     if raw >= 2**63:
         return raw - 2**64
     return raw - 0
+
+
+def _local_day_to_utc_range(day: date, tz_name: str) -> tuple[datetime, datetime]:
+    """
+    Convert a local date in tz_name to the UTC half-open range [start, end).
+    Handles DST transitions correctly via zoneinfo.
+    """
+    tz = ZoneInfo(tz_name)
+    local_start = datetime(day.year, day.month, day.day, 0, 0, 0, tzinfo=tz)
+    local_end = datetime(day.year, day.month, day.day, 0, 0, 0, tzinfo=tz)  # placeholder
+    # next day (safe across month/year boundaries)
+    next_day = day.fromordinal(day.toordinal() + 1)
+    local_end = datetime(next_day.year, next_day.month, next_day.day, 0, 0, 0, tzinfo=tz)
+
+    return (local_start.astimezone(ZoneInfo("UTC")), local_end.astimezone(ZoneInfo("UTC")))
+
+
+def _iso_weekday_for_local_date(day: date) -> int:
+    # Python date.isoweekday(): Monday=1 .. Sunday=7
+    return day.isoweekday()
