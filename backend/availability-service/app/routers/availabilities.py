@@ -125,6 +125,16 @@ class DayAvailabilitySlotOut(BaseModel):
         from_attributes = True
 
 
+def _raise_http_from_domain_error(err: Exception) -> None:
+    if isinstance(err, NotFoundError):
+        raise HTTPException(status_code=404, detail=str(err))
+    if isinstance(err, ForbiddenError):
+        raise HTTPException(status_code=403, detail=str(err))
+
+    # Unexpected error type -> surface as 500 (keeps bugs visible in dev)
+    raise HTTPException(status_code=500, detail="internal server error")
+
+
 @router.post("/punctual", response_model=AvailabilityOut)
 async def create_punctual(
     payload: PunctualAvailabilityIn,
@@ -149,7 +159,6 @@ async def create_punctual(
         _raise_http_from_domain_error(e)
 
     return AvailabilityOut.model_validate(created)
-
 
 
 @router.patch("/punctual/{availability_id}", response_model=AvailabilityOut)
@@ -180,6 +189,25 @@ async def update_punctual(
         _raise_http_from_domain_error(e)
 
     return AvailabilityOut.model_validate(updated)
+
+
+@router.delete("/punctual/{availability_id}", response_model=AvailabilityOut)
+async def delete_punctual(
+    availability_id: uuid.UUID,
+    user_id: uuid.UUID,  # MVP: will come from auth later
+    session: AsyncSession = Depends(get_async_session),
+) -> AvailabilityOut:
+    engine = AvailabilityEngine()
+    try:
+        deleted = await engine.delete_punctual(
+            session=session,
+            user_id=user_id,
+            availability_id=availability_id,
+        )
+    except Exception as e:
+        _raise_http_from_domain_error(e)
+
+    return AvailabilityOut.model_validate(deleted)
 
 
 @router.get("/day", response_model=list[DayAvailabilitySlotOut])

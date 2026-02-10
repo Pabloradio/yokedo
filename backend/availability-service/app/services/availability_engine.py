@@ -211,7 +211,36 @@ class AvailabilityEngine:
             await session.flush()
             await session.refresh(row)
             return row
+
         
+    async def delete_punctual(
+        self,
+        session: AsyncSession,
+        user_id: uuid.UUID,
+        availability_id: uuid.UUID,
+    ) -> Availability:
+        async with session.begin():
+            await _advisory_lock_user(session, user_id)
+
+            stmt = select(Availability).where(Availability.id == availability_id)
+            row = (await session.execute(stmt)).scalar_one_or_none()
+            if row is None:
+                raise NotFoundError(resource="availability", resource_id=availability_id)
+
+            if row.user_id != user_id:
+                raise ForbiddenError(resource="availability", resource_id=availability_id)
+
+            # MVP safety: only user-created punctual slots can be deleted
+            if row.source != "punctual" or row.is_synthetic:
+                raise ForbiddenError(
+                    resource="availability",
+                    resource_id=availability_id,
+                    message="only non-synthetic punctual slots can be deleted in MVP",
+                )
+
+            await session.delete(row)
+            await session.flush()
+            return row
 
     async def create_weekly_template_slot(
         self,

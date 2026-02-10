@@ -1,6 +1,9 @@
+# app/core/settings.py
+
 from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
+    environment: str = "local"  # local | test | prod
     # PostgreSQL configuration
     postgres_host: str
     postgres_port: int
