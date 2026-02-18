@@ -18,6 +18,9 @@ backend/auth-service/.env
 *.swp
 *.swo
 
+# Local backups
+backups/
+
 # Logs
 *.log
 logs/
