@@ -49,3 +49,4 @@ pip-log.txt
 venv/
 env/
 backend/auth-service/.venv/
+yokedo.code-workspace
