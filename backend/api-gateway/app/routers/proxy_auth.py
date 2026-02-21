@@ -4,8 +4,14 @@ from typing import Iterable
 
 import httpx
 from fastapi import APIRouter, Request, Response
+from fastapi.responses import JSONResponse
 
-from app.settings import get_auth_service_base_url
+from app.settings import (
+    get_auth_service_base_url,
+    REQUEST_ID_HEADER,
+    PROXY_CONNECT_TIMEOUT_SECONDS,
+    PROXY_READ_TIMEOUT_SECONDS,
+)
 
 router = APIRouter(prefix="/api/auth", tags=["proxy-auth"])
 
@@ -31,41 +37,58 @@ def _filter_headers(headers: Iterable[tuple[str, str]]) -> dict[str, str]:
     return filtered
 
 
-@router.api_route("/{full_path:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"])
+@router.api_route(
+    "/{full_path:path}",
+    methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"],
+)
 async def proxy_auth(request: Request, full_path: str) -> Response:
-    """
-    Reverse-proxy requests from:
-      /api/auth/<full_path>
-    to:
-      {AUTH_SERVICE_BASE_URL}/<full_path>
-
-    We keep the original Authorization header (Bearer token) as-is.
-    """
     base_url = get_auth_service_base_url()
     target_url = f"{base_url}/{full_path}"
 
-    # Query string
     if request.url.query:
         target_url = f"{target_url}?{request.url.query}"
 
-    # Body (may be empty)
     body = await request.body()
-
-    # Forward most headers (excluding hop-by-hop)
     outgoing_headers = _filter_headers(request.headers.items())
 
-    timeout = httpx.Timeout(connect=2.0, read=10.0, write=10.0, pool=10.0)
+    request_id = getattr(request.state, "request_id", None)
+    if request_id:
+        outgoing_headers[REQUEST_ID_HEADER] = request_id
 
-    async with httpx.AsyncClient(timeout=timeout) as client:
-        upstream = await client.request(
-            method=request.method,
-            url=target_url,
-            headers=outgoing_headers,
-            content=body,
+    timeout = httpx.Timeout(
+        connect=PROXY_CONNECT_TIMEOUT_SECONDS,
+        read=PROXY_READ_TIMEOUT_SECONDS,
+        write=PROXY_READ_TIMEOUT_SECONDS,
+        pool=PROXY_CONNECT_TIMEOUT_SECONDS,
+    )
+
+    try:
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            upstream = await client.request(
+                method=request.method,
+                url=target_url,
+                headers=outgoing_headers,
+                content=body,
+            )
+    except httpx.ReadTimeout:
+        # Upstream accepted connection but did not respond in time
+        return JSONResponse(
+            status_code=504,
+            content={"detail": "Upstream timeout"},
+            headers={REQUEST_ID_HEADER: request_id} if request_id else None,
+        )
+    except httpx.RequestError:
+        # Connection errors, DNS, refused, etc.
+        return JSONResponse(
+            status_code=502,
+            content={"detail": "Upstream connection error"},
+            headers={REQUEST_ID_HEADER: request_id} if request_id else None,
         )
 
-    # Return upstream response
     response_headers = _filter_headers(upstream.headers.items())
+    if request_id:
+        response_headers[REQUEST_ID_HEADER] = request_id
+
     return Response(
         content=upstream.content,
         status_code=upstream.status_code,
