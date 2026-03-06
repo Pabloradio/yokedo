@@ -42,8 +42,21 @@ def _filter_headers(headers: Iterable[tuple[str, str]]) -> dict[str, str]:
     methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"],
 )
 async def proxy_auth(request: Request, full_path: str) -> Response:
-    base_url = get_auth_service_base_url()
-    target_url = f"{base_url}/{full_path}"
+
+    # AUTH_SERVICE_BASE_URL must contain only the service origin, without path prefix.
+    # Example: http://127.0.0.1:7000
+    base_url = get_auth_service_base_url().rstrip("/")
+
+    # FastAPI documentation endpoints live at application level, not inside the business router.
+    # Business endpoints remain under /api/auth/* in auth-service.
+    if full_path == "docs":
+        target_url = f"{base_url}/docs"
+    elif full_path == "openapi.json":
+        target_url = f"{base_url}/openapi.json"
+    elif full_path == "redoc":
+        target_url = f"{base_url}/redoc"
+    else:
+        target_url = f"{base_url}/api/auth/{full_path}".rstrip("/")
 
     if request.url.query:
         target_url = f"{target_url}?{request.url.query}"
