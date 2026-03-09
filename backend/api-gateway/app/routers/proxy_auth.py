@@ -11,6 +11,8 @@ from app.settings import (
     REQUEST_ID_HEADER,
     PROXY_CONNECT_TIMEOUT_SECONDS,
     PROXY_READ_TIMEOUT_SECONDS,
+    INTERNAL_USER_ID_HEADER,
+    INTERNAL_USER_IS_ADMIN_HEADER,
 )
 
 router = APIRouter(prefix="/api/auth", tags=["proxy-auth"])
@@ -66,7 +68,17 @@ async def proxy_auth(request: Request, full_path: str) -> Response:
 
     request_id = getattr(request.state, "request_id", None)
     if request_id:
+        # Forward request correlation header to upstream services.
         outgoing_headers[REQUEST_ID_HEADER] = request_id
+
+    auth_user = getattr(request.state, "auth_user", None)
+    if auth_user is not None:
+        # Propagate trusted identity headers only after gateway-side authentication.
+        # Downstream services must treat these headers as internal-only signals.
+        # These headers define the authenticated identity as resolved by the gateway.
+        # They are meant for trusted internal service-to-service communication only.
+        outgoing_headers[INTERNAL_USER_ID_HEADER] = auth_user.user_id
+        outgoing_headers[INTERNAL_USER_IS_ADMIN_HEADER] = str(auth_user.is_admin).lower()
 
     timeout = httpx.Timeout(
         connect=PROXY_CONNECT_TIMEOUT_SECONDS,

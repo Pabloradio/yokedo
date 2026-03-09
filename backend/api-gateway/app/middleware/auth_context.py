@@ -50,6 +50,12 @@ class AuthContextMiddleware(BaseHTTPMiddleware):
     - On failure, returns 401/403 with JSON payload.
     - Adds basic request-id propagation to error responses.
 
+    Security note:
+    - Internal identity headers such as X-User-ID and X-User-Is-Admin are trusted
+      only inside the backend network and only when injected by the gateway.
+    - Downstream services must not trust client-provided versions of these headers
+      if they are ever exposed directly outside the trusted network.
+
     Limitations (accepted for MVP):
     - In-memory cache: per-process and resets on restart.
     - If gateway is replicated, cache is per replica.

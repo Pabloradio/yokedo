@@ -23,6 +23,10 @@ AUTH_TOKEN_VALIDATION_PATH = "/api/auth/me"
 AUTH_CONTEXT_CACHE_TTL_SECONDS = 30
 AUTH_CONTEXT_CACHE_MAX_ENTRIES = 1000
 
+# Internal identity propagation headers (trusted only inside the backend network)
+INTERNAL_USER_ID_HEADER = "X-User-ID"
+INTERNAL_USER_IS_ADMIN_HEADER = "X-User-Is-Admin"
+
 
 def get_auth_service_base_url() -> str:
     # Example: http://127.0.0.1:7000
