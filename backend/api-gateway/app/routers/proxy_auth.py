@@ -65,7 +65,11 @@ async def proxy_auth(request: Request, full_path: str) -> Response:
 
     body = await request.body()
     outgoing_headers = _filter_headers(request.headers.items())
-
+    # Remove any client-supplied identity headers.
+    # Only the gateway is allowed to define authenticated identity.
+    outgoing_headers.pop(INTERNAL_USER_ID_HEADER, None)
+    outgoing_headers.pop(INTERNAL_USER_IS_ADMIN_HEADER, None)
+    
     request_id = getattr(request.state, "request_id", None)
     if request_id:
         # Forward request correlation header to upstream services.
