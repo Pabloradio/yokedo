@@ -1,29 +1,32 @@
-# Yokedo
+# Repository Overview
 
-Yokedo es una web app para coordinar quedadas entre amigos, permitiendo compartir disponibilidad, generar enlaces de invitación y proponer planes en un par de clics.
+This repository contains a long-term personal engineering project focused on backend architecture, data modeling, and production-oriented MLOps practices.
 
-## Estructura del repositorio
+The system is being developed as a microservices-oriented backend platform where service boundaries, logical data ownership, migration strategies, and ML components evolve under operational constraints.
 
-- `backend/auth-service/`: servicio de autenticación (FastAPI).  
-- `.github/workflows/`: configuración de CI/CD.  
-- `docker-compose.yml`: PostgreSQL + servicios en local.  
-- `README.md`: este documento.
+## Engineering Focus
 
-## Primeros pasos
+The repo prioritizes:
 
-1. Clonar el repo  
-2. `docker-compose up --build`  
-3. Explorar el servicio de auth en `http://localhost:8001`
+- FastAPI-based backend services
+- PostgreSQL as the primary datastore, including vector support where applicable
+- Strict migration isolation with dedicated Alembic version tables per service
+- Containerized local development environments
+- CI/CD automation through GitHub Actions
+- Progressive integration of ML components such as embeddings and similarity logic
 
+Security, schema correctness, and reproducibility are treated as first-class concerns.
 
+## Architectural Approach
 
-## 📘 Documentación Técnica
+Each service is responsible for:
 
-- [Modelo de Datos (v1.0)](docs/data/yokedo_data_schema.md)
-- [MER (PlantUML)](docs/diagrams/yokedo_mer.puml)
-- [Arquitectura General](docs/architecture/system_overview.md)
-- [Decisiones de Diseño (ADR)](docs/decisions/)
+- Its own API contracts
+- Its own migration history
+- Clear ownership over its subset of tables
+- Minimal cross-service coupling
 
+Services currently share a PostgreSQL database while preserving isolated migration metadata and explicit table ownership boundaries.
 
-![MER de Yokedo](docs/diagrams/yokedo_mer.png)
-
+This repository reflects ongoing engineering work rather than a finished product. 
+Selected architecture notes and design decisions are documented in the docs/ directory.
