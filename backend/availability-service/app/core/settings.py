@@ -1,0 +1,23 @@
+# app/core/settings.py
+
+from pydantic_settings import BaseSettings
+
+class Settings(BaseSettings):
+    environment: str = "local"  # local | test | prod
+    # PostgreSQL configuration
+    postgres_host: str
+    postgres_port: int
+    postgres_db: str
+    postgres_user: str
+    postgres_password: str
+
+    # Pydantic v2 settings configuration
+    # This replaces the previous SettingsConfigDict to avoid Pylance warnings.
+    model_config = {
+        "env_file": ".env",
+        "env_file_encoding": "utf-8"
+    }
+
+
+# Instantiate global settings object
+settings = Settings()
