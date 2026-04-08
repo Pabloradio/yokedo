@@ -1,18 +1,15 @@
 from logging.config import fileConfig
 import asyncio
-
-from sqlalchemy import pool
-from sqlalchemy.ext.asyncio import create_async_engine
+from typing import Literal, Optional
 
 from alembic import context
+from sqlalchemy import pool
+from sqlalchemy.engine import Connection
+from sqlalchemy.ext.asyncio import create_async_engine
+from sqlalchemy.schema import SchemaItem
 
 from app.core.settings import settings
-from app.models.base import Base
-from sqlalchemy.engine import Connection
-
-
-from typing import Optional, Literal
-from sqlalchemy.schema import SchemaItem
+from app.migrations.metadata import migration_metadata
 
 
 # --- Alembic config ---
@@ -22,8 +19,8 @@ if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
 
-# --- Metadata ---
-target_metadata = Base.metadata
+# --- Metadata used only for Alembic autogenerate ---
+target_metadata = migration_metadata
 
 
 def include_object(
@@ -41,20 +38,19 @@ def include_object(
     compare_to: Optional[SchemaItem],
 ) -> bool:
     if type_ == "table":
-        return name in {"contact_requests"}
+        return name in {"contact_requests", "contacts", "contact_events"}
     return True
 
 
-# --- Migration runner ---
-def run_migrations_online():
+def run_migrations_online() -> None:
     connectable = create_async_engine(
         settings.database_url,
         poolclass=pool.NullPool,
     )
 
-    async def run_async_migrations():
+    async def run_async_migrations() -> None:
         async with connectable.connect() as connection:
-            await connection.run_sync(do_run_migrations) 
+            await connection.run_sync(do_run_migrations)
 
     def do_run_migrations(connection: Connection) -> None:
         context.configure(
@@ -70,7 +66,6 @@ def run_migrations_online():
     asyncio.run(run_async_migrations())
 
 
-# --- Entry point ---
 if context.is_offline_mode():
     raise NotImplementedError("Offline migrations not supported")
 else:
