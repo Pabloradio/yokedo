@@ -189,10 +189,24 @@ async def accept_invitation_link(
     existing_acceptance = existing_acceptance_result.scalar_one_or_none()
 
     if existing_acceptance is not None:
+        await acquire_transaction_advisory_lock(
+            session,
+            build_contact_pair_lock_key(
+                invitation_link.creator_id,
+                invitation_recipient_user_id,
+            ),
+        )
+
+        contact = await _get_contact_between_users(
+            session,
+            user_a_id=invitation_link.creator_id,
+            user_b_id=invitation_recipient_user_id,
+        )
+
         return AcceptInvitationLinkResult(
             status="already_accepted",
             invitation_link_id=invitation_link.id,
-            contact_id=None,
+            contact_id=contact.id if contact is not None else None,
             creator_id=invitation_link.creator_id,
             invitation_recipient_user_id=invitation_recipient_user_id,
             current_uses=invitation_link.current_uses,
@@ -202,15 +216,11 @@ async def accept_invitation_link(
 
     now = datetime.now(timezone.utc)
 
-    if invitation_link.expires_at <= now:
-        if invitation_link.link_status == "active":
-            invitation_link.link_status = "expired"
-            invitation_link.updated_at = now
-
-        raise InvitationLinkExpiredError
-
     if invitation_link.link_status == "revoked":
         raise InvitationLinkRevokedError
+
+    if invitation_link.expires_at <= now:
+        raise InvitationLinkExpiredError
 
     if invitation_link.link_status == "exhausted":
         raise InvitationLinkExhaustedError
@@ -242,10 +252,6 @@ async def accept_invitation_link(
         )
 
     if invitation_link.current_uses >= invitation_link.max_uses:
-        if invitation_link.link_status == "active":
-            invitation_link.link_status = "exhausted"
-            invitation_link.updated_at = now
-
         raise InvitationLinkExhaustedError
 
     user_low_id, user_high_id = _build_canonical_user_pair(

@@ -10,10 +10,11 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class CreateInvitationLinkRequest(BaseModel):
-    max_uses: int = Field(
+    max_uses: Literal[1, 5, 10, 25, 50] = Field(
         description="Maximum number of effective invitation uses.",
     )
     expires_in_days: int = Field(
+        gt=0,
         description="Number of days until the invitation link expires.",
     )
 
