@@ -6,9 +6,11 @@ from sqlalchemy.ext.asyncio import (
     async_sessionmaker,
     create_async_engine,
 )
-
-import app.models.users_stub  # noqa: F401
 from app.core.settings import settings
+from importlib import import_module
+
+import_module("app.models.users_stub")
+
 
 
 @pytest_asyncio.fixture

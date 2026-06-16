@@ -1,3 +1,4 @@
+# pyright: reportPrivateUsage=false
 from uuid import uuid4
 
 from app.services.invitation_service import _build_canonical_user_pair
