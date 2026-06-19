@@ -1,3 +1,5 @@
+# alembic/env.py
+
 from logging.config import fileConfig
 import asyncio
 from typing import Literal, Optional
@@ -38,7 +40,13 @@ def include_object(
     compare_to: Optional[SchemaItem],
 ) -> bool:
     if type_ == "table":
-        return name in {"contact_requests", "contacts", "contact_events"}
+        return name in {
+            "contact_requests",
+            "contacts",
+            "contact_events",
+            "invitation_links",
+            "invitation_acceptances",
+        }
     return True
 
 

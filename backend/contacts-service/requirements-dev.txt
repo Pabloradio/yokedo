@@ -1,0 +1,4 @@
+ruff==0.15.13
+pytest
+pytest-asyncio
+httpx

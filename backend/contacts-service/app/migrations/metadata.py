@@ -1,13 +1,16 @@
 # app/migrations/metadata.py
 
-from sqlalchemy import Column, MetaData, Table
-from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from typing import cast
 
+from sqlalchemy import Column, MetaData, Table
+from sqlalchemy.dialects.postgresql import UUID as PGUUID
+
 from app.models.base import NAMING_CONVENTION
+from app.models.contact_events import ContactEvent
 from app.models.contact_requests import ContactRequest
 from app.models.contacts import Contact
-from app.models.contact_events import ContactEvent
+from app.models.invitation_acceptances import InvitationAcceptance
+from app.models.invitation_links import InvitationLink
 
 
 migration_metadata = MetaData(naming_convention=NAMING_CONVENTION)
@@ -23,3 +26,5 @@ Table(
 cast(Table, ContactRequest.__table__).to_metadata(migration_metadata)
 cast(Table, Contact.__table__).to_metadata(migration_metadata)
 cast(Table, ContactEvent.__table__).to_metadata(migration_metadata)
+cast(Table, InvitationLink.__table__).to_metadata(migration_metadata)
+cast(Table, InvitationAcceptance.__table__).to_metadata(migration_metadata)
